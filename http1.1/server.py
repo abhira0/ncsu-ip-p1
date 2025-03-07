@@ -6,7 +6,8 @@ import sys
 
 class CustomHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        self.files_dir = os.path.abspath("./files")
+        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "files")
+        self.files_dir = os.path.abspath(file_path)
         super().__init__(*args, directory=self.files_dir, **kwargs)
     
     def end_headers(self):

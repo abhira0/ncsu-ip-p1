@@ -1,11 +1,13 @@
 import requests
-import time
+import time, os
 import json
 import math
 import click
 from requests_toolbelt.utils import dump
 
-with open("./machines.json", 'r') as f:
+file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "machines.json")
+
+with open(file_path, 'r') as f:
     MACHINE_IP_MAP = json.load(f)
 
 def download_file(url, timeout=30):
