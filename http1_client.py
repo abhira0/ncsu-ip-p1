@@ -89,15 +89,14 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
     logging.info(f"Starting experiment: {file_name} - {repetitions} repetitions")
     
     # Print section header
-    click.echo("\n" + "=" * 80)
-    click.echo(click.style(f" 🔬 EXPERIMENT: {file_name} - {repetitions} repetitions "))
     click.echo("=" * 80)
-    click.echo(click.style(f"📡 Downloading from: {file_url}", fg='cyan'))
+    click.echo(click.style(f"EXPERIMENT: {file_name} - {repetitions} repetitions "))
+    click.echo("=" * 40)
     
     success_count = 0
     with click.progressbar(
         range(repetitions), 
-        label=click.style(f'⏬ Downloading {file_name}', fg='bright_green'),
+        label=click.style(f'Downloading {file_name}', fg='bright_green'),
         item_show_func=lambda i: f"Iteration {i+1}/{repetitions}" if i is not None else ""
     ) as bar:
         for i in bar:
@@ -148,16 +147,15 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
         }
         
         # Show summary with fancy colors
-        click.echo(click.style(f"Avg transfer time: {time_stats['mean']:.6f}s", fg='bright_blue', bold=True) + 
+        click.echo(f"Avg transfer time: {time_stats['mean']:.6f}s" + 
                   click.style(f" (±{time_stats['stddev']:.6f})", fg='blue'))
         
         # Color-code throughput based on speed
         throughput_kb = throughput_stats['mean']/1024
-        throughput_color = 'bright_green' if throughput_kb > 1000 else 'green' if throughput_kb > 500 else 'yellow'
-        click.echo(click.style(f"Avg throughput: {throughput_kb:.2f} KB/s", fg=throughput_color, bold=True) + 
+        click.echo(f"Avg throughput: {throughput_kb:.2f} KB/s" + 
                   click.style(f" (±{throughput_stats['stddev']/1024:.2f})", fg='blue'))
         
-        click.echo(click.style(f"Avg overhead ratio: {overhead_stats['mean']:.6f}", fg='magenta', bold=True) + 
+        click.echo(f"Avg overhead ratio: {overhead_stats['mean']:.6f}" + 
                   click.style(f" (±{overhead_stats['stddev']:.6f})", fg='blue'))
         
         return True
