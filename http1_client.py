@@ -3,10 +3,8 @@ import time
 import json
 import math
 import click
-from urllib.parse import urljoin
 from requests_toolbelt.utils import dump
 
-# IP address mapping
 with open("./machines.json", 'r') as f:
     MACHINE_IP_MAP = json.load(f)
 
@@ -53,7 +51,6 @@ def calculate_statistics(values):
     
     mean = sum(values) / n
     
-    # Calculate standard deviation
     if n > 1:
         variance = sum((x - mean) ** 2 for x in values) / (n - 1)
         stddev = math.sqrt(variance)
@@ -66,9 +63,8 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
     """Run a complete experiment for a specific file size with multiple repetitions"""
     results = []
     file_name = f"{file_prefix}_{file_size}"
-    file_url = urljoin(server_url, file_name)
+    file_url = f"{server_url}/{file_name}"
     
-    # Print section header
     click.echo("=" * 80)
     with click.progressbar(
         range(repetitions), 
@@ -79,19 +75,15 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
             result = download_file(file_url)
             results.append(result)
     
-    # Only calculate statistics if we have results
     if results:
-        # Extract lists of values for statistical analysis
         transfer_times = [r['transfer_time'] for r in results]
         throughputs = [r['throughput'] for r in results]
         overhead_ratios = [r['overhead_ratio'] for r in results]
         
-        # Calculate statistics
         time_stats = calculate_statistics(transfer_times)
         throughput_stats = calculate_statistics(throughputs)
         overhead_stats = calculate_statistics(overhead_ratios)
         
-        # Store result in the results_data dictionary
         results_data[file_name] = {
             "file_size_bytes": results[0]['file_size'],
             "repetitions_completed": len(results),
@@ -108,14 +100,12 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
                 "stddev": overhead_stats["stddev"],
                 "description": "Total application layer data / file size"
             },
-            "raw_results": results  # Include all raw results for detailed analysis if needed
+            "raw_results": results
         }
         
-        # Show summary with fancy colors
         click.echo(f"Avg transfer time:" + click.style(f" {time_stats['mean']:.6f}s", fg="magenta") +
                   click.style(f" (±{time_stats['stddev']:.6f})", fg='blue'))
         
-        # Color-code throughput based on speed
         throughput_kb = throughput_stats['mean']/1024
         click.echo(f"Avg throughput:" + click.style(f" {throughput_kb:.2f} KB/s", fg="magenta") +
                   click.style(f" (±{throughput_stats['stddev']/1024:.2f})", fg='blue'))
@@ -147,7 +137,6 @@ def main(server, file):
         {"size": "10MB", "repetitions": 1}
     ]
     
-    # Create a single results data structure
     results_data = {
         "protocol": "HTTP/1.1",
         "server": server,
@@ -156,7 +145,6 @@ def main(server, file):
         "files": {}
     }
     
-    # Run all experiments
     for exp in experiments:
         run_experiment(
             server_url, 
@@ -166,7 +154,6 @@ def main(server, file):
             results_data["files"]
         )
     
-    # Write consolidated results to a single JSON file
     result_filename = f"results_{file}_from_{server}_http1.json"
     with open(result_filename, 'w') as f:
         json.dump(results_data, f, indent=2)
