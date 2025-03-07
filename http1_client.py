@@ -3,12 +3,13 @@ import time
 import csv
 import os
 import logging
-import argparse
 import json
 import math
+import click
 from urllib.parse import urljoin
 from requests_toolbelt.utils import dump
 
+# ============================== 📡 CONFIG 📡 ==============================
 # IP address mapping
 VM_IP_MAP = {
     "vm1": "192.168.254.129",
@@ -22,7 +23,9 @@ logging.basicConfig(
     filename='http_client.log'
 )
 
+# ============================== 📥 DOWNLOAD FUNCTIONS 📥 ==============================
 def download_file(url, save_path, timeout=30):
+    """Download a single file and measure performance metrics"""
     start_time = time.time()
     
     try:
@@ -53,9 +56,10 @@ def download_file(url, save_path, timeout=30):
     
     except Exception as e:
         logging.error(f"Error downloading {url}: {str(e)}")
-        print(f"Error downloading {url}: {str(e)}")
+        click.echo(click.style(f"❌ Error downloading {url}: {str(e)}", fg='bright_red', bold=True))
         return None
 
+# ============================== 📊 ANALYSIS FUNCTIONS 📊 ==============================
 def calculate_statistics(values):
     """Calculate mean and standard deviation for a list of values"""
     n = len(values)
@@ -74,6 +78,7 @@ def calculate_statistics(values):
     return {"mean": mean, "stddev": stddev}
 
 def run_experiment(server_url, file_prefix, file_size, repetitions, results_data):
+    """Run a complete experiment for a specific file size with multiple repetitions"""
     download_dir = "downloads"
     os.makedirs(download_dir, exist_ok=True)
     
@@ -82,26 +87,33 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
     file_url = urljoin(server_url, file_name)
     
     logging.info(f"Starting experiment: {file_name} - {repetitions} repetitions")
-    print(f"Starting experiment: {file_name} - {repetitions} repetitions")
-    print(f"Downloading from: {file_url}")
     
-    for i in range(repetitions):
-        save_path = os.path.join(download_dir, f"{file_name}_{i}")
-        result = download_file(file_url, save_path)
-        
-        if result:
-            logging.info(f"Completed {i+1}/{repetitions} - Time: {result['transfer_time']:.6f}s, "
-                         f"Throughput: {result['throughput']/1024:.2f} KB/s")
+    # Print section header
+    click.echo("\n" + "=" * 80)
+    click.echo(click.style(f" 🔬 EXPERIMENT: {file_name} - {repetitions} repetitions "))
+    click.echo("=" * 80)
+    click.echo(click.style(f"📡 Downloading from: {file_url}", fg='cyan'))
+    
+    success_count = 0
+    with click.progressbar(
+        range(repetitions), 
+        label=click.style(f'⏬ Downloading {file_name}', fg='bright_green'),
+        item_show_func=lambda i: f"Iteration {i+1}/{repetitions}" if i is not None else ""
+    ) as bar:
+        for i in bar:
+            save_path = os.path.join(download_dir, f"{file_name}_{i}")
+            result = download_file(file_url, save_path)
             
-            if (i+1) % 10 == 0 or repetitions <= 10:
-                print(f"Completed {i+1}/{repetitions} - Time: {result['transfer_time']:.6f}s, "
-                      f"Throughput: {result['throughput']/1024:.2f} KB/s")
-            
-            results.append(result)
-        else:
-            print(f"Failed to download {file_url} on iteration {i+1}. Aborting experiment.")
-            logging.error(f"Failed to download {file_url} on iteration {i+1}. Aborting experiment.")
-            break
+            if result:
+                logging.info(f"Completed {i+1}/{repetitions} - Time: {result['transfer_time']:.6f}s, "
+                             f"Throughput: {result['throughput']/1024:.2f} KB/s")
+                
+                results.append(result)
+                success_count += 1
+            else:
+                click.echo(click.style(f"❌ Failed to download {file_url} on iteration {i+1}. Aborting experiment.", fg='bright_red', bold=True))
+                logging.error(f"Failed to download {file_url} on iteration {i+1}. Aborting experiment.")
+                break
     
     # Only calculate statistics if we have results
     if results:
@@ -135,24 +147,45 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
             "raw_results": results  # Include all raw results for detailed analysis if needed
         }
         
-        print(f"Experiment completed for {file_name}:")
-        print(f"  Avg transfer time: {time_stats['mean']:.6f}s (±{time_stats['stddev']:.6f})")
-        print(f"  Avg throughput: {throughput_stats['mean']/1024:.2f} KB/s (±{throughput_stats['stddev']/1024:.2f})")
-        print(f"  Avg overhead ratio: {overhead_stats['mean']:.6f} (±{overhead_stats['stddev']:.6f})")
+        # Show summary with fancy colors
+        click.echo(click.style(f"Avg transfer time: {time_stats['mean']:.6f}s", fg='bright_blue', bold=True) + 
+                  click.style(f" (±{time_stats['stddev']:.6f})", fg='blue'))
+        
+        # Color-code throughput based on speed
+        throughput_kb = throughput_stats['mean']/1024
+        throughput_color = 'bright_green' if throughput_kb > 1000 else 'green' if throughput_kb > 500 else 'yellow'
+        click.echo(click.style(f"Avg throughput: {throughput_kb:.2f} KB/s", fg=throughput_color, bold=True) + 
+                  click.style(f" (±{throughput_stats['stddev']/1024:.2f})", fg='blue'))
+        
+        click.echo(click.style(f"Avg overhead ratio: {overhead_stats['mean']:.6f}", fg='magenta', bold=True) + 
+                  click.style(f" (±{overhead_stats['stddev']:.6f})", fg='blue'))
         
         return True
     
     return False
 
-def main(server, file_prefix):
+# ============================== 🚀 CLI COMMAND 🚀 ==============================
+@click.command()
+@click.option('--server', type=click.Choice(['vm1', 'vm2']), required=True, 
+              help='Server to connect to (vm1 or vm2)')
+@click.option('--file', type=click.Choice(['A', 'B']), required=True,
+              help='File prefix to request (A or B)')
+def main(server, file):
+    """HTTP/1.1 Client for Protocol Testing
+
+    This tool performs download experiments using HTTP/1.1 protocol.
+    It tests different file sizes with multiple repetitions to gather
+    performance metrics like throughput, transfer time, and overhead ratio.
+    """
+    
     server_ip = VM_IP_MAP.get(server)
     if not server_ip:
         logging.error(f"Unknown server: {server}. Use vm1 or vm2.")
-        print(f"Unknown server: {server}. Use vm1 or vm2.")
+        click.echo(click.style(f"❌ Unknown server: {server}. Use vm1 or vm2.", fg='bright_red', bold=True))
         return
     
     server_url = f"http://{server_ip}:8000/"
-    
+
     experiments = [
         {"size": "10kB", "repetitions": 1000},
         {"size": "100kB", "repetitions": 100},
@@ -164,32 +197,25 @@ def main(server, file_prefix):
     results_data = {
         "protocol": "HTTP/1.1",
         "server": server,
-        "file_prefix": file_prefix,
+        "file_prefix": file,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "files": {}
     }
     
+    # Run all experiments
     for exp in experiments:
         run_experiment(
             server_url, 
-            file_prefix, 
+            file, 
             exp["size"], 
             exp["repetitions"],
             results_data["files"]
         )
     
     # Write consolidated results to a single JSON file
-    result_filename = f"results_{file_prefix}_from_{server}_http1.json"
+    result_filename = f"results_{file}_from_{server}_http1.json"
     with open(result_filename, 'w') as f:
         json.dump(results_data, f, indent=2)
     
-    print(f"\nAll experiments completed. Results saved to {result_filename}")
-
-parser = argparse.ArgumentParser(description='HTTP/1.1 Client for Protocol Testing')
-parser.add_argument('--server', choices=['vm1', 'vm2'], required=True, 
-                    help='Server to connect to (vm1 or vm2)')
-parser.add_argument('--file', choices=['A', 'B'], required=True,
-                    help='File prefix to request (A or B)')
-args = parser.parse_args()
-
-main(args.server, args.file)
+if __name__ == '__main__':
+    main()
