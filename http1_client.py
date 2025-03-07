@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 from urllib.parse import urljoin
+from requests_toolbelt.utils import dump
 
 # IP address mapping
 VM_IP_MAP = {
@@ -22,40 +23,23 @@ logging.basicConfig(
 )
 
 def download_file(url, save_path, timeout=30):
-    total_bytes = 0
     start_time = time.time()
     
     try:
         headers = {'Connection': 'close'}  # Ensure connection closes after each request
-        response = requests.get(url, stream=True, timeout=timeout, headers=headers)
+        response = requests.get(url, stream=False, timeout=timeout, headers=headers)
         response.raise_for_status()
-        
-        from rich import inspect
-        print(len(response.text))
-        exit()
-
-        with open(save_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-                    total_bytes += len(chunk)
         
         end_time = time.time()
         transfer_time = end_time - start_time
-        
-        # Calculate throughput (bytes per second)
-        file_size = os.path.getsize(save_path)
+
+        data = dump.dump_response(response)
+        total_app_data = len(data)
+
+        file_size = int(response.headers["Content-Length"])
         throughput = file_size / transfer_time
-
-        quit()
         
-        # Total application layer data (including headers)
-        header_size = sum(len(k) + len(v) for k, v in response.request.headers.items())
-        response_header_size = sum(len(k) + len(v) for k, v in response.headers.items())
-        total_app_data = len(response.raw)
-
-        
-        # Calculate overhead ratio (total app data / file size)
+        header_size = total_app_data - file_size
         overhead_ratio = total_app_data / file_size
         
         return {
@@ -64,7 +48,7 @@ def download_file(url, save_path, timeout=30):
             'file_size': file_size,
             'total_app_data': total_app_data,
             'overhead_ratio': overhead_ratio,
-            'header_size': header_size + response_header_size
+            'header_size': header_size
         }
     
     except Exception as e:
@@ -160,7 +144,7 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
     
     return False
 
-def run_all_experiments(server, file_prefix):
+def main(server, file_prefix):
     server_ip = VM_IP_MAP.get(server)
     if not server_ip:
         logging.error(f"Unknown server: {server}. Use vm1 or vm2.")
@@ -179,7 +163,6 @@ def run_all_experiments(server, file_prefix):
     # Create a single results data structure
     results_data = {
         "protocol": "HTTP/1.1",
-        "client": f"VM{'1' if server == 'vm2' else '2'}",
         "server": server,
         "file_prefix": file_prefix,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -201,38 +184,12 @@ def run_all_experiments(server, file_prefix):
         json.dump(results_data, f, indent=2)
     
     print(f"\nAll experiments completed. Results saved to {result_filename}")
-    
-    # Generate a summary CSV as well for easier import into Excel
-    summary_csv = f"summary_{file_prefix}_from_{server}_http1.csv"
-    with open(summary_csv, 'w', newline='') as csvfile:
-        fieldnames = ['file_name', 'file_size_bytes', 'repetitions', 
-                     'mean_transfer_time', 'stddev_transfer_time',
-                     'mean_throughput_bps', 'stddev_throughput_bps',
-                     'mean_overhead_ratio', 'stddev_overhead_ratio']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        
-        writer.writeheader()
-        for file_name, data in results_data["files"].items():
-            writer.writerow({
-                'file_name': file_name,
-                'file_size_bytes': data['file_size_bytes'],
-                'repetitions': data['repetitions_completed'],
-                'mean_transfer_time': data['transfer_time']['mean'],
-                'stddev_transfer_time': data['transfer_time']['stddev'],
-                'mean_throughput_bps': data['throughput_bps']['mean'],
-                'stddev_throughput_bps': data['throughput_bps']['stddev'],
-                'mean_overhead_ratio': data['overhead_ratio']['mean'],
-                'stddev_overhead_ratio': data['overhead_ratio']['stddev']
-            })
-    
-    print(f"Summary CSV saved to {summary_csv}")
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='HTTP/1.1 Client for Protocol Testing')
-    parser.add_argument('--server', choices=['vm1', 'vm2'], required=True, 
-                        help='Server to connect to (vm1 or vm2)')
-    parser.add_argument('--file', choices=['A', 'B'], required=True,
-                        help='File prefix to request (A or B)')
-    args = parser.parse_args()
-    
-    run_all_experiments(args.server, args.file)
+parser = argparse.ArgumentParser(description='HTTP/1.1 Client for Protocol Testing')
+parser.add_argument('--server', choices=['vm1', 'vm2'], required=True, 
+                    help='Server to connect to (vm1 or vm2)')
+parser.add_argument('--file', choices=['A', 'B'], required=True,
+                    help='File prefix to request (A or B)')
+args = parser.parse_args()
+
+main(args.server, args.file)
