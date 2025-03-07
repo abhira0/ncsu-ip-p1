@@ -1,24 +1,14 @@
 import http.server
 import socketserver
-import logging
 import os
 import argparse
 import sys
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    filename='http_server.log'
-)
 
 class CustomHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.files_dir = os.path.abspath("./files")
         super().__init__(*args, directory=self.files_dir, **kwargs)
     
-    def log_message(self, format, *args):
-        logging.info(f"{self.client_address[0]} - {format%args}")
-        
     def end_headers(self):
         self.send_header('Connection', 'close')  # make sure connection closes after each request
         super().end_headers()
@@ -27,7 +17,6 @@ def start_server(port=8000):
     files_dir = os.path.abspath("./files")
     if not os.path.exists(files_dir):
         print(f"Error: Directory './files' not found. Please create it and add your test files.")
-        logging.error(f"Directory './files' not found")
         sys.exit(1)
         
     print(f"Available files in {files_dir}:")
@@ -37,7 +26,6 @@ def start_server(port=8000):
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("0.0.0.0", port), CustomHTTPRequestHandler) as httpd:
         print(f"Serving HTTP on 0.0.0.0 port {port} (http://0.0.0.0:{port}/)")
-        logging.info(f"Server started on port {port}")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
@@ -45,7 +33,6 @@ def start_server(port=8000):
         finally:
             httpd.server_close()
             print("Server stopped.")
-            logging.info("Server stopped")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='HTTP/1.1 Server for Protocol Testing')
