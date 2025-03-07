@@ -5,7 +5,8 @@ import math
 import click
 from requests_toolbelt.utils import dump
 
-file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "machines.json")
+cur_file_path = os.path.dirname(os.path.abspath(__file__))
+file_path = os.path.join(cur_file_path, "..", "machines.json")
 
 with open(file_path, 'r') as f:
     MACHINE_IP_MAP = json.load(f)
@@ -157,7 +158,7 @@ def main(server, file):
         )
     
     result_filename = f"results_{file}_from_{server}_http1.json"
-    with open(result_filename, 'w') as f:
+    with open(os.path.join(cur_file_path, result_filename), 'w') as f:
         json.dump(results_data, f, indent=2)
     
 if __name__ == '__main__':
