@@ -1,8 +1,5 @@
 import requests
 import time
-import csv
-import os
-import logging
 import json
 import math
 import click
@@ -10,10 +7,8 @@ from urllib.parse import urljoin
 from requests_toolbelt.utils import dump
 
 # IP address mapping
-VM_IP_MAP = {
-    "vm1": "192.168.254.129",
-    "vm2": "192.168.254.130"
-}
+with open("./machines.json", 'r') as f:
+    MACHINE_IP_MAP = json.load(f)
 
 def download_file(url, timeout=30):
     """Download a single file and measure performance metrics"""
@@ -46,9 +41,9 @@ def download_file(url, timeout=30):
         }
     
     except Exception as e:
-        logging.error(f"Error downloading {url}: {str(e)}")
-        click.echo(click.style(f"❌ Error downloading {url}: {str(e)}", fg='bright_red', bold=True))
-        return None
+        click.echo(click.style(f"\n❌ Error downloading {url}: {str(e)}", fg='bright_red', bold=True))
+        quit()
+
 
 def calculate_statistics(values):
     """Calculate mean and standard deviation for a list of values"""
@@ -73,32 +68,16 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
     file_name = f"{file_prefix}_{file_size}"
     file_url = urljoin(server_url, file_name)
     
-    logging.info(f"Starting experiment: {file_name} - {repetitions} repetitions")
-    
     # Print section header
     click.echo("=" * 80)
-    click.echo(click.style(f"EXPERIMENT: {file_name} - {repetitions} repetitions "))
-    click.echo("=" * 40)
-    
-    success_count = 0
     with click.progressbar(
         range(repetitions), 
-        label=click.style(f'Downloading {file_name}', fg='bright_green'),
+        label=click.style(f'Downloading {file_name} x {repetitions}', fg='bright_green'),
         item_show_func=lambda i: f"Iteration {i+1}/{repetitions}" if i is not None else ""
     ) as bar:
         for i in bar:
             result = download_file(file_url)
-            
-            if result:
-                logging.info(f"Completed {i+1}/{repetitions} - Time: {result['transfer_time']:.6f}s, "
-                             f"Throughput: {result['throughput']/1024:.2f} KB/s")
-                
-                results.append(result)
-                success_count += 1
-            else:
-                click.echo(click.style(f"❌ Failed to download {file_url} on iteration {i+1}. Aborting experiment.", fg='bright_red', bold=True))
-                logging.error(f"Failed to download {file_url} on iteration {i+1}. Aborting experiment.")
-                break
+            results.append(result)
     
     # Only calculate statistics if we have results
     if results:
@@ -133,15 +112,15 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
         }
         
         # Show summary with fancy colors
-        click.echo(f"Avg transfer time: {time_stats['mean']:.6f}s" + 
+        click.echo(f"Avg transfer time:" + click.style(f" {time_stats['mean']:.6f}s", fg="magenta") +
                   click.style(f" (±{time_stats['stddev']:.6f})", fg='blue'))
         
         # Color-code throughput based on speed
         throughput_kb = throughput_stats['mean']/1024
-        click.echo(f"Avg throughput: {throughput_kb:.2f} KB/s" + 
+        click.echo(f"Avg throughput:" + click.style(f" {throughput_kb:.2f} KB/s", fg="magenta") +
                   click.style(f" (±{throughput_stats['stddev']/1024:.2f})", fg='blue'))
         
-        click.echo(f"Avg overhead ratio: {overhead_stats['mean']:.6f}" + 
+        click.echo(f"Avg overhead ratio:" + click.style(f" {overhead_stats['mean']:.6f}", fg="magenta") +
                   click.style(f" (±{overhead_stats['stddev']:.6f})", fg='blue'))
         
         return True
@@ -154,16 +133,8 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
 @click.option('--file', type=click.Choice(['A', 'B']), required=True,
               help='File prefix to request (A or B)')
 def main(server, file):
-    """HTTP/1.1 Client for Protocol Testing
-
-    This tool performs download experiments using HTTP/1.1 protocol.
-    It tests different file sizes with multiple repetitions to gather
-    performance metrics like throughput, transfer time, and overhead ratio.
-    """
-    
-    server_ip = VM_IP_MAP.get(server)
+    server_ip = MACHINE_IP_MAP.get(server)
     if not server_ip:
-        logging.error(f"Unknown server: {server}. Use vm1 or vm2.")
         click.echo(click.style(f"❌ Unknown server: {server}. Use vm1 or vm2.", fg='bright_red', bold=True))
         return
     
