@@ -1,7 +1,6 @@
 import http.server
 import socketserver
 import os
-import argparse
 import sys
 
 class CustomHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -35,9 +34,4 @@ def start_server(port=8000):
             httpd.server_close()
             print("Server stopped.")
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='HTTP/1.1 Server for Protocol Testing')
-    parser.add_argument('--port', type=int, default=8000, help='Port to run the server on (default: 8000)')
-    args = parser.parse_args()
-    
-    start_server(args.port)
+start_server()
