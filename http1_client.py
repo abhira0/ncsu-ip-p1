@@ -9,22 +9,13 @@ import click
 from urllib.parse import urljoin
 from requests_toolbelt.utils import dump
 
-# ============================== 📡 CONFIG 📡 ==============================
 # IP address mapping
 VM_IP_MAP = {
     "vm1": "192.168.254.129",
     "vm2": "192.168.254.130"
 }
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    filename='http_client.log'
-)
-
-# ============================== 📥 DOWNLOAD FUNCTIONS 📥 ==============================
-def download_file(url, save_path, timeout=30):
+def download_file(url, timeout=30):
     """Download a single file and measure performance metrics"""
     start_time = time.time()
     
@@ -59,7 +50,6 @@ def download_file(url, save_path, timeout=30):
         click.echo(click.style(f"❌ Error downloading {url}: {str(e)}", fg='bright_red', bold=True))
         return None
 
-# ============================== 📊 ANALYSIS FUNCTIONS 📊 ==============================
 def calculate_statistics(values):
     """Calculate mean and standard deviation for a list of values"""
     n = len(values)
@@ -79,9 +69,6 @@ def calculate_statistics(values):
 
 def run_experiment(server_url, file_prefix, file_size, repetitions, results_data):
     """Run a complete experiment for a specific file size with multiple repetitions"""
-    download_dir = "downloads"
-    os.makedirs(download_dir, exist_ok=True)
-    
     results = []
     file_name = f"{file_prefix}_{file_size}"
     file_url = urljoin(server_url, file_name)
@@ -100,8 +87,7 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
         item_show_func=lambda i: f"Iteration {i+1}/{repetitions}" if i is not None else ""
     ) as bar:
         for i in bar:
-            save_path = os.path.join(download_dir, f"{file_name}_{i}")
-            result = download_file(file_url, save_path)
+            result = download_file(file_url)
             
             if result:
                 logging.info(f"Completed {i+1}/{repetitions} - Time: {result['transfer_time']:.6f}s, "
@@ -162,7 +148,6 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
     
     return False
 
-# ============================== 🚀 CLI COMMAND 🚀 ==============================
 @click.command()
 @click.option('--server', type=click.Choice(['vm1', 'vm2']), required=True, 
               help='Server to connect to (vm1 or vm2)')
