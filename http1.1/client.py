@@ -6,9 +6,8 @@ import click
 from requests_toolbelt.utils import dump
 
 cur_file_path = os.path.dirname(os.path.abspath(__file__))
-file_path = os.path.join(cur_file_path, "..", "machines.json")
 
-with open(file_path, 'r') as f:
+with open(os.path.join(cur_file_path, "..", "machines.json"), 'r') as f:
     MACHINE_IP_MAP = json.load(f)
 
 def download_file(url, timeout=30):
