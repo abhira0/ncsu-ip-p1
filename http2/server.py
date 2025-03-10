@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Simple HTTP/2-compatible server without SSL for CSC/ECE 573 Project #1
+Simple HTTP/2-compatible server for CSC/ECE 573 Project #1
+Non-SSL version for faster testing
 """
 
 import http.server
@@ -29,7 +30,7 @@ class HTTP2Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header('HTTP2-Settings', 'AAMAAABkAAQAAP__')
         super().end_headers()
 
-def start_server(port=8080):
+def start_server(port=8000):
     # Ensure files directory exists
     files_dir = os.path.abspath("./files")
     if not os.path.exists(files_dir):
@@ -44,12 +45,11 @@ def start_server(port=8080):
             if os.path.isfile(file_path):
                 logger.info(f" - {filename} ({os.path.getsize(file_path)} bytes)")
     
-    # Create HTTP server
+    # Create a non-SSL HTTP server with threading
     handler = HTTP2Handler
     httpd = socketserver.ThreadingTCPServer(("", port), handler)
     
-    logger.info(f"Serving HTTP/2 at http://0.0.0.0:{port}")
-    logger.info("Press Ctrl+C to stop the server")
+    logger.info(f"Serving HTTP/2 on http://0.0.0.0:{port}")
     
     try:
         httpd.serve_forever()
@@ -60,7 +60,7 @@ def start_server(port=8080):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HTTP/2 Server for Project #1")
-    parser.add_argument("--port", type=int, default=8000, help="Port to listen on (default: 8080)")
+    parser.add_argument("--port", type=int, default=8000, help="Port to listen on (default: 8000)")
     args = parser.parse_args()
     
     start_server(args.port)
