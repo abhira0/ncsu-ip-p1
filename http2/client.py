@@ -161,7 +161,7 @@ def main():
         all_results["files"][result["file_name"]] = result
     
     # Save results to file
-    output_file = f"results_{args.file}_from_{args.server}_http2.json"
+    output_file = f"results_{args.file}_from_{args.server}_http2_ssl.json"
     with open(os.path.join(cur_file_path, output_file), "w") as f:
         json.dump(all_results, f, indent=2)
     
