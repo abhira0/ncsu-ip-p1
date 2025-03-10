@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Simple HTTP/2-compatible client for CSC/ECE 573 Project #1
+Non-SSL version for faster testing
 """
 
 import requests
@@ -9,21 +10,12 @@ import json
 import os
 import sys
 import argparse
-import ssl
 import statistics
-from urllib3.exceptions import InsecureRequestWarning
-
-# Suppress only the single InsecureRequestWarning
-requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 cur_file_path = os.path.dirname(os.path.abspath(__file__))
 
 with open(os.path.join(cur_file_path, "..", "machines.json"), 'r') as f:
     MACHINE_IP_MAP = json.load(f)
-
-def load_machine_ips():
-    with open("./machines.json", "r") as f:
-        return json.load(f)
 
 def download_file(url, output=None):
     """Download a file using HTTP/2 headers and measure performance"""
@@ -36,8 +28,8 @@ def download_file(url, output=None):
     start_time = time.time()
     
     try:
-        # Disable SSL verification for self-signed certificates
-        response = requests.get(url, headers=headers, verify=False, stream=True)
+        # Use regular HTTP
+        response = requests.get(url, headers=headers, stream=True)
         
         # Get content data
         data = response.content
@@ -74,7 +66,8 @@ def download_file(url, output=None):
 def run_experiment(server_ip, file_prefix, file_size, repetitions):
     """Run a download experiment for a specific file size with multiple repetitions"""
     file_name = f"{file_prefix}_{file_size}"
-    url = f"https://{server_ip}:8443/{file_name}"
+    # Using HTTP instead of HTTPS and port 8000
+    url = f"http://{server_ip}:8000/{file_name}"
     
     print(f"\nDownloading {file_name} {repetitions} times...")
     

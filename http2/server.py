@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """
-Simple HTTP/2-compatible server for CSC/ECE 573 Project #1
-Updated for Python 3.12+ compatibility
+Simple HTTP/2-compatible server without SSL for CSC/ECE 573 Project #1
 """
 
 import http.server
 import socketserver
-import ssl
 import os
 import sys
 import argparse
@@ -31,33 +29,7 @@ class HTTP2Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header('HTTP2-Settings', 'AAMAAABkAAQAAP__')
         super().end_headers()
 
-def generate_cert_if_needed(cert_file="server.crt", key_file="server.key"):
-    """Generate a self-signed certificate if it doesn't exist"""
-    if os.path.exists(cert_file) and os.path.exists(key_file):
-        return
-    
-    logger.info(f"Generating self-signed certificate...")
-    
-    # Use OpenSSL command-line tool to generate certificate
-    cmd = f'openssl req -x509 -newkey rsa:2048 -keyout {key_file} -out {cert_file} -days 365 -nodes -subj "/CN=localhost"'
-    try:
-        # Try with newer OpenSSL that supports subjectAltName
-        cmd_with_alt = cmd + ' -addext "subjectAltName = DNS:localhost,IP:127.0.0.1"'
-        ret = os.system(cmd_with_alt)
-        if ret != 0:
-            # Fall back to basic command for older OpenSSL
-            ret = os.system(cmd)
-    except:
-        # Fall back to basic command
-        ret = os.system(cmd)
-    
-    if os.path.exists(cert_file) and os.path.exists(key_file):
-        logger.info(f"Certificate generated successfully.")
-    else:
-        logger.error(f"Failed to generate certificate.")
-        sys.exit(1)
-
-def start_server(port=8443):
+def start_server(port=8080):
     # Ensure files directory exists
     files_dir = os.path.abspath("./files")
     if not os.path.exists(files_dir):
@@ -72,23 +44,12 @@ def start_server(port=8443):
             if os.path.isfile(file_path):
                 logger.info(f" - {filename} ({os.path.getsize(file_path)} bytes)")
     
-    # Generate certificate
-    generate_cert_if_needed()
-    
-    # Create an HTTPS server with modern SSL context approach
+    # Create HTTP server
     handler = HTTP2Handler
-    
-    # Create SSL context
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain(certfile="server.crt", keyfile="server.key")
-    
-    # Create server
     httpd = socketserver.ThreadingTCPServer(("", port), handler)
     
-    # Wrap with SSL context
-    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
-    
-    logger.info(f"Serving HTTP/2 at https://0.0.0.0:{port}")
+    logger.info(f"Serving HTTP/2 at http://0.0.0.0:{port}")
+    logger.info("Press Ctrl+C to stop the server")
     
     try:
         httpd.serve_forever()
@@ -99,7 +60,7 @@ def start_server(port=8443):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HTTP/2 Server for Project #1")
-    parser.add_argument("--port", type=int, default=8443, help="Port to listen on (default: 8443)")
+    parser.add_argument("--port", type=int, default=8000, help="Port to listen on (default: 8080)")
     args = parser.parse_args()
     
     start_server(args.port)
