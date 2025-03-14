@@ -1,218 +1,138 @@
-#!/usr/bin/env python3
-"""
-HTTP/2 Cleartext (h2c) client using h2 module for CSC/ECE 573 Project #1
-Non-SSL version for faster testing
-"""
-
-import socket
-import json
+import httpx
 import time
 import os
-import sys
-import argparse
-import logging
-import statistics
-from h2.connection import H2Connection
-from h2.config import H2Configuration
-from h2.events import (
-    ResponseReceived, DataReceived, StreamEnded,
-    StreamReset, SettingsAcknowledged,
-)
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('h2c_client')
+import json
+import math
+import click
+import asyncio
 
 cur_file_path = os.path.dirname(os.path.abspath(__file__))
 
 with open(os.path.join(cur_file_path, "..", "machines.json"), 'r') as f:
     MACHINE_IP_MAP = json.load(f)
 
-def download_file(host, port, path):
-    """Download a file using HTTP/2 Cleartext (h2c) and measure performance"""
+async def download_file(client, url, timeout=30):
+    """Download a single file and measure performance metrics"""
     start_time = time.time()
     
-    # Create socket
-    sock = socket.socket()
-    sock.settimeout(10)  # Set timeout
-    
-    # Connect to server
     try:
-        sock.connect((host, port))
-    except socket.error as e:
-        logger.error(f"Connection error: {e}")
-        return None
-    
-    # Create HTTP/2 connection
-    config = H2Configuration(client_side=True)
-    conn = H2Connection(config=config)
-    conn.initiate_connection()
-    
-    # Send the preamble
-    sock.sendall(conn.data_to_send())
-    
-    # Send the request
-    stream_id = conn.get_next_available_stream_id()
-    headers = [
-        (':method', 'GET'),
-        (':path', f'/{path}'),
-        (':authority', f'{host}:{port}'),
-        (':scheme', 'http'),
-        ('user-agent', 'python-h2'),
-    ]
-    conn.send_headers(stream_id, headers, end_stream=True)
-    sock.sendall(conn.data_to_send())
-    
-    # Receive the response
-    response_data = b''
-    header_size = 0
-    content_length = 0
-    response_received = False
-    stream_ended = False
-    
-    while not stream_ended:
-        try:
-            data = sock.recv(65535)
-            if not data:
-                break
-                
-            events = conn.receive_data(data)
-            
-            for event in events:
-                if isinstance(event, ResponseReceived):
-                    # Record headers size and content length
-                    for header, value in event.headers:
-                        header_size += len(header) + len(value) + 2  # +2 for colon and space
-                        if header == b'content-length':
-                            content_length = int(value.decode())
-                    response_received = True
-                
-                elif isinstance(event, DataReceived):
-                    # Append response data
-                    response_data += event.data
-                
-                elif isinstance(event, StreamEnded):
-                    # Stream ended
-                    stream_ended = True
-                
-                elif isinstance(event, StreamReset):
-                    logger.error(f"Stream reset by server: {event.error_code}")
-                    break
-                
-                elif isinstance(event, SettingsAcknowledged):
-                    pass  # Nothing to do here
-            
-            # Send any pending data
-            pending_data = conn.data_to_send()
-            if pending_data:
-                sock.sendall(pending_data)
+        response = await client.get(url, timeout=timeout)
+        response.raise_for_status()
+        content = response.read()
         
-        except socket.error as e:
-            logger.error(f"Error during download: {e}")
-            break
-    
-    # Close the connection
-    sock.close()
-    
-    end_time = time.time()
-    
-    # Calculate metrics
-    if response_received and response_data:
-        duration = end_time - start_time
-        throughput = len(response_data) / duration if duration > 0 else 0
-        overhead_ratio = (len(response_data) + header_size) / len(response_data) if len(response_data) > 0 else 0
+        end_time = time.time()
+        transfer_time = end_time - start_time
+
+        file_size = int(response.headers.get("Content-Length", len(content)))
+        throughput = file_size / transfer_time
+        
+        # Calculate approximate header size and overhead
+        headers_str = str(response.headers)
+        header_size = len(headers_str.encode('utf-8'))
+        total_app_data = file_size + header_size
+        overhead_ratio = total_app_data / file_size
         
         return {
-            "duration_seconds": duration,
-            "throughput_bytes_per_second": throughput,
-            "content_length_bytes": len(response_data),
-            "header_size_bytes": header_size,
-            "overhead_ratio": overhead_ratio,
+            'transfer_time': transfer_time,
+            'throughput': throughput,
+            'file_size': file_size,
+            'total_app_data': total_app_data,
+            'overhead_ratio': overhead_ratio,
+            'header_size': header_size
         }
     
-    return None
+    except Exception as e:
+        click.echo(click.style(f"\n❌ Error downloading {url}: {str(e)}", fg='bright_red', bold=True))
+        raise
 
-def run_experiment(server_ip, file_prefix, file_size, repetitions):
-    """Run a download experiment for a specific file size with multiple repetitions"""
-    file_name = f"{file_prefix}_{file_size}"
+def calculate_statistics(values):
+    """Calculate mean and standard deviation for a list of values"""
+    n = len(values)
+    if n == 0:
+        return {"mean": 0, "stddev": 0}
     
-    print(f"\nDownloading {file_name} {repetitions} times...")
+    mean = sum(values) / n
     
-    results = []
-    
-    for i in range(repetitions):
-        sys.stdout.write(f"\rIteration {i+1}/{repetitions}")
-        sys.stdout.flush()
-        
-        result = download_file(server_ip, 8000, file_name)
-        if result:
-            results.append(result)
-        else:
-            print(f"\nError in iteration {i+1}, skipping...")
-    
-    if not results:
-        print(f"All download attempts failed for {file_name}")
-        return None
-    
-    # Calculate averages
-    durations = [r["duration_seconds"] for r in results]
-    throughputs = [r["throughput_bytes_per_second"] for r in results]
-    overheads = [r["overhead_ratio"] for r in results]
-    
-    avg_duration = statistics.mean(durations)
-    avg_throughput = statistics.mean(throughputs)
-    avg_overhead = statistics.mean(overheads)
-    
-    # Calculate standard deviations (if more than one sample)
-    if len(durations) > 1:
-        stdev_duration = statistics.stdev(durations)
-        stdev_throughput = statistics.stdev(throughputs)
-        stdev_overhead = statistics.stdev(overheads)
+    if n > 1:
+        variance = sum((x - mean) ** 2 for x in values) / (n - 1)
+        stddev = math.sqrt(variance)
     else:
-        stdev_duration = 0
-        stdev_throughput = 0
-        stdev_overhead = 0
+        stddev = 0
     
-    print(f"\n{file_name} - Average results:")
-    print(f"  Duration: {avg_duration:.6f} seconds (±{stdev_duration:.6f})")
-    print(f"  Throughput: {avg_throughput/1024:.2f} KB/s (±{stdev_throughput/1024:.2f})")
-    print(f"  Overhead ratio: {avg_overhead:.6f} (±{stdev_overhead:.6f})")
-    
-    return {
-        "file_name": file_name,
-        "repetitions_completed": len(results),
-        "content_length_bytes": results[0]["content_length_bytes"],
-        "transfer_time": {
-            "mean": avg_duration,
-            "stddev": stdev_duration
-        },
-        "throughput_bps": {
-            "mean": avg_throughput,
-            "stddev": stdev_throughput
-        },
-        "overhead_ratio": {
-            "mean": avg_overhead,
-            "stddev": stdev_overhead
-        },
-        "raw_results": results
-    }
+    return {"mean": mean, "stddev": stddev}
 
-def main():
-    parser = argparse.ArgumentParser(description="HTTP/2 Cleartext Client for Project #1")
-    parser.add_argument("--server", choices=["vm1", "vm2"], required=True, 
-                       help="Server to connect to (vm1 or vm2)")
-    parser.add_argument("--file", choices=["A", "B"], required=True,
-                       help="File prefix to request (A or B)")
-    args = parser.parse_args()
+async def run_experiment(client, server_url, file_prefix, file_size, repetitions, results_data):
+    """Run a complete experiment for a specific file size with multiple repetitions"""
+    results = []
+    file_name = f"{file_prefix}_{file_size}"
+    file_url = f"{server_url}/{file_name}"
     
-    # Load machine IPs
-    server_ip = MACHINE_IP_MAP.get(args.server)
+    click.echo("=" * 80)
+    with click.progressbar(
+        range(repetitions), 
+        label=click.style(f'Downloading {file_name} x {repetitions}', fg='bright_green'),
+        item_show_func=lambda i: f"Iteration {i+1}/{repetitions}" if i is not None else ""
+    ) as bar:
+        for i in bar:
+            result = await download_file(client, file_url)
+            results.append(result)
+            bar.update(1)
     
+    if results:
+        transfer_times = [r['transfer_time'] for r in results]
+        throughputs = [r['throughput'] for r in results]
+        overhead_ratios = [r['overhead_ratio'] for r in results]
+        
+        time_stats = calculate_statistics(transfer_times)
+        throughput_stats = calculate_statistics(throughputs)
+        overhead_stats = calculate_statistics(overhead_ratios)
+        
+        results_data[file_name] = {
+            "file_size_bytes": results[0]['file_size'],
+            "repetitions_completed": len(results),
+            "transfer_time": {
+                "mean": time_stats["mean"],
+                "stddev": time_stats["stddev"]
+            },
+            "throughput_bps": {
+                "mean": throughput_stats["mean"],
+                "stddev": throughput_stats["stddev"]
+            },
+            "overhead_ratio": {
+                "mean": overhead_stats["mean"],
+                "stddev": overhead_stats["stddev"],
+                "description": "Total application layer data / file size"
+            },
+            "raw_results": results
+        }
+        
+        click.echo(f"Avg transfer time:" + click.style(f" {time_stats['mean']:.6f}s", fg="magenta") +
+                  click.style(f" (±{time_stats['stddev']:.6f})", fg='blue'))
+        
+        throughput_kb = throughput_stats['mean']/1024
+        click.echo(f"Avg throughput:" + click.style(f" {throughput_kb:.2f} KB/s", fg="magenta") +
+                  click.style(f" (±{throughput_stats['stddev']/1024:.2f})", fg='blue'))
+        
+        click.echo(f"Avg overhead ratio:" + click.style(f" {overhead_stats['mean']:.6f}", fg="magenta") +
+                  click.style(f" (±{overhead_stats['stddev']:.6f})", fg='blue'))
+        
+        return True
+    
+    return False
+
+@click.command()
+@click.option('--server', type=click.Choice(['vm1', 'vm2']), required=True, 
+              help='Server to connect to (vm1 or vm2)')
+@click.option('--file', type=click.Choice(['A', 'B']), required=True,
+              help='File prefix to request (A or B)')
+async def main(server, file):
+    server_ip = MACHINE_IP_MAP.get(server)
     if not server_ip:
-        print(f"Error: IP for server '{args.server}' not found in machines.json")
-        sys.exit(1)
+        click.echo(click.style(f"❌ Unknown server: {server}. Use vm1 or vm2.", fg='bright_red', bold=True))
+        return
     
-    # Define experiments
+    server_url = f"https://{server_ip}:8001"
+
     experiments = [
         {"size": "10kB", "repetitions": 1000},
         {"size": "100kB", "repetitions": 100},
@@ -220,27 +140,29 @@ def main():
         {"size": "10MB", "repetitions": 1}
     ]
     
-    # Run experiments
-    all_results = {
+    results_data = {
         "protocol": "HTTP/2",
+        "server": server,
+        "file_prefix": file,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "server": args.server,
-        "server_ip": server_ip,
-        "file_prefix": args.file,
         "files": {}
     }
     
-    for exp in experiments:
-        result = run_experiment(server_ip, args.file, exp["size"], exp["repetitions"])
-        if result:
-            all_results["files"][result["file_name"]] = result
+    # HTTP/2 requires TLS, but we'll skip certificate verification for local testing
+    async with httpx.AsyncClient(http2=True, verify=False) as client:
+        for exp in experiments:
+            await run_experiment(
+                client,
+                server_url, 
+                file, 
+                exp["size"], 
+                exp["repetitions"],
+                results_data["files"]
+            )
     
-    # Save results to file
-    output_file = f"results_{args.file}_from_{args.server}_http2.json"
-    with open(os.path.join(cur_file_path, output_file), "w") as f:
-        json.dump(all_results, f, indent=2)
-    
-    print(f"\nResults saved to {output_file}")
+    result_filename = f"results_{file}_from_{server}_http2.json"
+    with open(os.path.join(cur_file_path, result_filename), 'w') as f:
+        json.dump(results_data, f, indent=2)
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    asyncio.run(main())
