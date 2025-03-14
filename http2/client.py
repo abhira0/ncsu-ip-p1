@@ -5,6 +5,8 @@ import json
 import math
 import click
 import asyncio
+import ssl
+from urllib.parse import urlparse
 
 cur_file_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -18,32 +20,41 @@ async def download_file(client, url, timeout=30):
     try:
         response = await client.get(url, timeout=timeout)
         response.raise_for_status()
-        content = response.read()
+        content = response.content
         
         end_time = time.time()
         transfer_time = end_time - start_time
-
-        file_size = int(response.headers.get("Content-Length", len(content)))
-        throughput = file_size / transfer_time
         
-        # Calculate approximate header size and overhead
+        # Calculate HTTP/2 overhead estimation
+        file_size = len(content)
+        
+        # Get response headers size (approximately)
         headers_str = str(response.headers)
-        header_size = len(headers_str.encode('utf-8'))
-        total_app_data = file_size + header_size
+        header_size = len(headers_str)
+        
+        # HTTP/2 frame overhead: 9 bytes per frame, assuming ~16KB frames for data
+        num_frames = math.ceil(file_size / 16384)
+        frame_overhead = num_frames * 9
+        
+        # HTTP/2 uses HPACK header compression - estimated compression ratio ~0.6
+        estimated_header_size = int(header_size * 0.6)  
+        
+        total_app_data = file_size + estimated_header_size + frame_overhead
         overhead_ratio = total_app_data / file_size
         
         return {
             'transfer_time': transfer_time,
-            'throughput': throughput,
+            'throughput': file_size / transfer_time,
             'file_size': file_size,
             'total_app_data': total_app_data,
             'overhead_ratio': overhead_ratio,
-            'header_size': header_size
+            'header_size': estimated_header_size,
+            'frame_overhead': frame_overhead
         }
     
     except Exception as e:
         click.echo(click.style(f"\n❌ Error downloading {url}: {str(e)}", fg='bright_red', bold=True))
-        raise
+        return None
 
 def calculate_statistics(values):
     """Calculate mean and standard deviation for a list of values"""
@@ -75,8 +86,10 @@ async def run_experiment(client, server_url, file_prefix, file_size, repetitions
     ) as bar:
         for i in bar:
             result = await download_file(client, file_url)
-            results.append(result)
-            bar.update(1)
+            if result:
+                results.append(result)
+            # Small delay to avoid overwhelming the server
+            await asyncio.sleep(0.01)
     
     if results:
         transfer_times = [r['transfer_time'] for r in results]
@@ -120,49 +133,62 @@ async def run_experiment(client, server_url, file_prefix, file_size, repetitions
     
     return False
 
-@click.command()
-@click.option('--server', type=click.Choice(['vm1', 'vm2']), required=True, 
-              help='Server to connect to (vm1 or vm2)')
-@click.option('--file', type=click.Choice(['A', 'B']), required=True,
-              help='File prefix to request (A or B)')
-async def main(server, file):
+async def main_async(server, file, use_tls):
     server_ip = MACHINE_IP_MAP.get(server)
     if not server_ip:
         click.echo(click.style(f"❌ Unknown server: {server}. Use vm1 or vm2.", fg='bright_red', bold=True))
         return
     
-    server_url = f"https://{server_ip}:8001"
-
-    experiments = [
-        {"size": "10kB", "repetitions": 1000},
-        {"size": "100kB", "repetitions": 100},
-        {"size": "1MB", "repetitions": 10},
-        {"size": "10MB", "repetitions": 1}
-    ]
+    protocol = "https" if use_tls else "http"
+    port = 8443 if use_tls else 8000
+    server_url = f"{protocol}://{server_ip}:{port}"
     
-    results_data = {
-        "protocol": "HTTP/2",
-        "server": server,
-        "file_prefix": file,
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "files": {}
+    # Prepare client options
+    client_kwargs = {
+        "http2": True,
+        "verify": False,  # Disable certificate verification for self-signed certs
     }
     
-    # HTTP/2 requires TLS, but we'll skip certificate verification for local testing
-    async with httpx.AsyncClient(http2=True, verify=False) as client:
+    # Using HTTP/2 requires a single persistent connection for all requests
+    async with httpx.AsyncClient(**client_kwargs) as client:
+        experiments = [
+            {"size": "10kB", "repetitions": 1000},
+            {"size": "100kB", "repetitions": 100},
+            {"size": "1MB", "repetitions": 10},
+            {"size": "10MB", "repetitions": 1}
+        ]
+        
+        results_data = {
+            "protocol": "HTTP/2",
+            "server": server,
+            "file_prefix": file,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "files": {}
+        }
+        
         for exp in experiments:
             await run_experiment(
-                client,
+                client, 
                 server_url, 
                 file, 
                 exp["size"], 
                 exp["repetitions"],
                 results_data["files"]
             )
-    
-    result_filename = f"results_{file}_from_{server}_http2.json"
-    with open(os.path.join(cur_file_path, result_filename), 'w') as f:
-        json.dump(results_data, f, indent=2)
+        
+        result_filename = f"results_{file}_from_{server}_http2.json"
+        with open(os.path.join(cur_file_path, result_filename), 'w') as f:
+            json.dump(results_data, f, indent=2)
+
+@click.command()
+@click.option('--server', type=click.Choice(['vm1', 'vm2']), required=True, 
+              help='Server to connect to (vm1 or vm2)')
+@click.option('--file', type=click.Choice(['A', 'B']), required=True,
+              help='File prefix to request (A or B)')
+@click.option('--with-tls/--without-tls', default=True, 
+              help='Use TLS (HTTPS) or not')
+def main(server, file, with_tls):
+    asyncio.run(main_async(server, file, with_tls))
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
