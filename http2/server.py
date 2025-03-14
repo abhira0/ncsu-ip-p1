@@ -1,11 +1,10 @@
+from hypercorn.config import Config
+from hypercorn.asyncio import serve
 from quart import Quart, send_file
 import os
 import sys
-import ssl
-import click
 import asyncio
-import hypercorn.asyncio
-from hypercorn.config import Config
+import click
 
 app = Quart(__name__)
 
@@ -21,10 +20,8 @@ async def serve_file(filename):
     return await send_file(file_path)
 
 @click.command()
-@click.option('--port', default=8443, help='Port to run the server on')
-@click.option('--with-tls/--without-tls', default=True, 
-              help='Enable/disable TLS (HTTP/2 requires TLS in browsers, but not for direct connections)')
-def start_server(port, with_tls):
+@click.option('--port', default=8000, help='Port to run the server on')
+def main(port):
     files_dir = os.path.abspath("./files")
     if not os.path.exists(files_dir):
         print(f"Error: Directory './files' not found. Please create it and add your test files.")
@@ -36,28 +33,13 @@ def start_server(port, with_tls):
     
     config = Config()
     config.bind = [f"0.0.0.0:{port}"]
-    config.alpn_protocols = ["h2", "http/1.1"] if with_tls else ["h2c", "http/1.1"]
     
-    if with_tls:
-        # Check for certificates
-        cert_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cert.pem")
-        key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "key.pem")
-        
-        if not (os.path.exists(cert_path) and os.path.exists(key_path)):
-            print("Certificates not found. Creating self-signed certificates...")
-            os.system(f"openssl req -x509 -newkey rsa:4096 -nodes -out {cert_path} "
-                     f"-keyout {key_path} -days 365 -subj '/CN=localhost'")
-        
-        config.certfile = cert_path
-        config.keyfile = key_path
-        
-        print(f"Serving HTTP/2 with TLS on 0.0.0.0 port {port} (https://0.0.0.0:{port}/)")
-    else:
-        print(f"Serving HTTP/2 without TLS on 0.0.0.0 port {port} (http://0.0.0.0:{port}/)")
-        # Explicitly set h2c for cleartext HTTP/2
-        config.h2_protocol = "h2c"
+    # Configure for HTTP/2 over cleartext
+    config.h2_protocol = True
+    config.use_reloader = True
     
-    asyncio.run(hypercorn.asyncio.serve(app, config))
+    print(f"Starting HTTP/2 server on http://0.0.0.0:{port}")
+    asyncio.run(serve(app, config))
 
 if __name__ == "__main__":
-    start_server()
+    main()

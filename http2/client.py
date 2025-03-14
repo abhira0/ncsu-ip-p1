@@ -5,8 +5,6 @@ import json
 import math
 import click
 import asyncio
-import ssl
-from urllib.parse import urlparse
 
 cur_file_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -133,24 +131,17 @@ async def run_experiment(client, server_url, file_prefix, file_size, repetitions
     
     return False
 
-async def main_async(server, file, use_tls):
+async def main_async(server, file):
     server_ip = MACHINE_IP_MAP.get(server)
     if not server_ip:
         click.echo(click.style(f"❌ Unknown server: {server}. Use vm1 or vm2.", fg='bright_red', bold=True))
         return
     
-    protocol = "https" if use_tls else "http"
-    port = 8443 if use_tls else 8000
-    server_url = f"{protocol}://{server_ip}:{port}"
+    port = 8000
+    server_url = f"http://{server_ip}:{port}"
     
-    # Prepare client options
-    client_kwargs = {
-        "http2": True,
-        "verify": False,  # Disable certificate verification for self-signed certs
-    }
-    
-    # Using HTTP/2 requires a single persistent connection for all requests
-    async with httpx.AsyncClient(**client_kwargs) as client:
+    # Using HTTP/2 over cleartext
+    async with httpx.AsyncClient(http2=True) as client:
         experiments = [
             {"size": "10kB", "repetitions": 1000},
             {"size": "100kB", "repetitions": 100},
@@ -185,10 +176,8 @@ async def main_async(server, file, use_tls):
               help='Server to connect to (vm1 or vm2)')
 @click.option('--file', type=click.Choice(['A', 'B']), required=True,
               help='File prefix to request (A or B)')
-@click.option('--with-tls/--without-tls', default=True, 
-              help='Use TLS (HTTPS) or not')
-def main(server, file, with_tls):
-    asyncio.run(main_async(server, file, with_tls))
+def main(server, file):
+    asyncio.run(main_async(server, file))
 
 if __name__ == '__main__':
     main()
