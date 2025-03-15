@@ -26,7 +26,7 @@ def download_file(url, timeout=30):
         total_app_data = len(data)
 
         file_size = int(response.headers["Content-Length"])
-        throughput = file_size / transfer_time
+        throughput = file_size * 8 / transfer_time
         
         header_size = total_app_data - file_size
         overhead_ratio = total_app_data / file_size
@@ -109,7 +109,7 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
                   click.style(f" (±{time_stats['stddev']:.6f})", fg='blue'))
         
         throughput_kb = throughput_stats['mean']/1024
-        click.echo(f"Avg throughput:" + click.style(f" {throughput_kb:.2f} KB/s", fg="magenta") +
+        click.echo(f"Avg throughput:" + click.style(f" {throughput_kb:.2f} Kb/s", fg="magenta") +
                   click.style(f" (±{throughput_stats['stddev']/1024:.2f})", fg='blue'))
         
         click.echo(f"Avg overhead ratio:" + click.style(f" {overhead_stats['mean']:.6f}", fg="magenta") +
