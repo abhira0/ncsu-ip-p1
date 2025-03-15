@@ -137,8 +137,8 @@ class HTTP2Client:
             # Calculate overhead (header size plus HTTP/2 framing overhead estimate)
             # The 18 bytes is an estimate of HTTP/2 frame overhead
             framing_overhead = 18
-            total_application_data = header_data_size + file_size + framing_overhead
-            overhead_ratio = total_application_data / file_size if file_size > 0 else 0
+            total_app_data = header_data_size + file_size + framing_overhead
+            overhead_ratio = total_app_data / file_size if file_size > 0 else 0
             
             # Calculate throughput in bits per second
             throughput = (file_size * 8) / transfer_time if transfer_time > 0 else 0
@@ -147,7 +147,7 @@ class HTTP2Client:
                 'transfer_time': transfer_time,
                 'file_size': file_size,
                 'throughput': throughput,
-                'total_application_data': total_application_data,
+                'total_app_data': total_app_data,
                 'overhead_ratio': overhead_ratio
             }
             
@@ -206,7 +206,7 @@ class HTTP2Client:
             "file_size_bytes": results[0]['file_size'],
             "repetitions_requested": repetitions,
             "repetitions_completed": len(results),
-            "transfer_time_seconds": {
+            "transfer_time": {
                 "mean": time_mean,
                 "stddev": time_stddev
             },

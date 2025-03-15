@@ -99,8 +99,7 @@ def run_experiment(server_url, file_prefix, file_size, repetitions, results_data
             },
             "overhead_ratio": {
                 "mean": overhead_stats["mean"],
-                "stddev": overhead_stats["stddev"],
-                "description": "Total application layer data / file size"
+                "stddev": overhead_stats["stddev"]
             },
             "raw_results": results
         }
