@@ -131,10 +131,6 @@ class HTTP2Client:
             end_time = time.time()
             transfer_time = end_time - start_time
             
-            # Save the received data to a file
-            with open(file_name, "wb") as f:
-                f.write(received_data)
-            
             # Get the actual file size
             file_size = len(received_data)
             
