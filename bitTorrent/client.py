@@ -3,6 +3,7 @@ import time
 import sys
 import os
 import shutil
+import requests
 
 def run_download(magnet_link, run_number):
     print(f"\n=== Starting download run {run_number} ===")
@@ -73,6 +74,11 @@ def main():
 
     for run in range(1, runs + 1):
         run_download(magnet_link, run)
+        requests.post("ack", payload="vm1")
+        is_ready = requests.get("ready")
+        while is_ready.json()["ready"] == False:
+            is_ready = requests.get("ready")
+            time.sleep(0.001)
         # Clean up downloads folder after each run
         print("Deleting downloads folder...")
         shutil.rmtree("./downloads", ignore_errors=True)
