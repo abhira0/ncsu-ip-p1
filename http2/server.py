@@ -4,7 +4,7 @@ from quart import Quart, send_file
 import os
 import sys
 import json
-import click
+import click, socket
 import h2.connection
 import h2.config
 
