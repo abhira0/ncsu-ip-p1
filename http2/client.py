@@ -82,52 +82,48 @@ async def run_experiment(client, server_url, file_prefix, file_size, repetitions
         label=click.style(f'Downloading {file_name} x {repetitions}', fg='bright_green'),
         item_show_func=lambda i: f"Iteration {i+1}/{repetitions}" if i is not None else ""
     ) as bar:
-        for i in bar:
+        for _ in bar:
             result = await download_file(client, file_url)
-            if result:
-                results.append(result)
-            # Small delay to avoid overwhelming the server
-            await asyncio.sleep(0.01)
+            results.append(result)
+
+    transfer_times = [r['transfer_time'] for r in results]
+    throughputs = [r['throughput'] for r in results]
+    overhead_ratios = [r['overhead_ratio'] for r in results]
     
-    if results:
-        transfer_times = [r['transfer_time'] for r in results]
-        throughputs = [r['throughput'] for r in results]
-        overhead_ratios = [r['overhead_ratio'] for r in results]
-        
-        time_stats = calculate_statistics(transfer_times)
-        throughput_stats = calculate_statistics(throughputs)
-        overhead_stats = calculate_statistics(overhead_ratios)
-        
-        results_data[file_name] = {
-            "file_size_bytes": results[0]['file_size'],
-            "repetitions_completed": len(results),
-            "transfer_time": {
-                "mean": time_stats["mean"],
-                "stddev": time_stats["stddev"]
-            },
-            "throughput_bps": {
-                "mean": throughput_stats["mean"],
-                "stddev": throughput_stats["stddev"]
-            },
-            "overhead_ratio": {
-                "mean": overhead_stats["mean"],
-                "stddev": overhead_stats["stddev"],
-                "description": "Total application layer data / file size"
-            },
-            "raw_results": results
-        }
-        
-        click.echo(f"Avg transfer time:" + click.style(f" {time_stats['mean']:.6f}s", fg="magenta") +
-                  click.style(f" (±{time_stats['stddev']:.6f})", fg='blue'))
-        
-        throughput_kb = throughput_stats['mean']/1024
-        click.echo(f"Avg throughput:" + click.style(f" {throughput_kb:.2f} KB/s", fg="magenta") +
-                  click.style(f" (±{throughput_stats['stddev']/1024:.2f})", fg='blue'))
-        
-        click.echo(f"Avg overhead ratio:" + click.style(f" {overhead_stats['mean']:.6f}", fg="magenta") +
-                  click.style(f" (±{overhead_stats['stddev']:.6f})", fg='blue'))
-        
-        return True
+    time_stats = calculate_statistics(transfer_times)
+    throughput_stats = calculate_statistics(throughputs)
+    overhead_stats = calculate_statistics(overhead_ratios)
+    
+    results_data[file_name] = {
+        "file_size_bytes": results[0]['file_size'],
+        "repetitions_completed": len(results),
+        "transfer_time": {
+            "mean": time_stats["mean"],
+            "stddev": time_stats["stddev"]
+        },
+        "throughput_bps": {
+            "mean": throughput_stats["mean"],
+            "stddev": throughput_stats["stddev"]
+        },
+        "overhead_ratio": {
+            "mean": overhead_stats["mean"],
+            "stddev": overhead_stats["stddev"],
+            "description": "Total application layer data / file size"
+        },
+        "raw_results": results
+    }
+    
+    click.echo(f"Avg transfer time:" + click.style(f" {time_stats['mean']:.6f}s", fg="magenta") +
+                click.style(f" (±{time_stats['stddev']:.6f})", fg='blue'))
+    
+    throughput_kb = throughput_stats['mean']/1024
+    click.echo(f"Avg throughput:" + click.style(f" {throughput_kb:.2f} KB/s", fg="magenta") +
+                click.style(f" (±{throughput_stats['stddev']/1024:.2f})", fg='blue'))
+    
+    click.echo(f"Avg overhead ratio:" + click.style(f" {overhead_stats['mean']:.6f}", fg="magenta") +
+                click.style(f" (±{overhead_stats['stddev']:.6f})", fg='blue'))
+    
+    return True
     
     return False
 
@@ -179,5 +175,4 @@ async def main_async(server, file):
 def main(server, file):
     asyncio.run(main_async(server, file))
 
-if __name__ == '__main__':
-    main()
+main()

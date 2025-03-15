@@ -8,7 +8,6 @@ app = Quart(__name__)
 
 @app.route('/<filename>')
 async def serve_file(filename):
-    """Serve requested file from the files directory"""
     files_dir = os.path.abspath("./files")
     file_path = os.path.join(files_dir, filename)
     
@@ -18,21 +17,12 @@ async def serve_file(filename):
     return await send_file(file_path)
 
 def main():
-    files_dir = os.path.abspath("./files")
-
-    print(f"Available files in {files_dir}:")
-    for filename in os.listdir(files_dir):
-        print(f" - {filename} ({os.path.getsize(os.path.join(files_dir, filename))} bytes)")
-    
     config = Config()
     config.bind = [f"0.0.0.0:8000"]
-    
-    # Configure for HTTP/2 over cleartext
     config.h2_protocol = True
     config.use_reloader = True
     
     print(f"Starting HTTP/2 server on http://0.0.0.0:8000")
     asyncio.run(serve(app, config))
 
-if __name__ == "__main__":
-    main()
+main()

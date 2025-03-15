@@ -15,7 +15,6 @@ app = Quart(__name__)
 
 @app.route('/<filename>')
 async def serve_file(filename):
-    """Serve requested file from the files directory"""
     files_dir = os.path.abspath("./files")
     file_path = os.path.join(files_dir, filename)
 
@@ -32,7 +31,6 @@ async def serve_file(filename):
     return response
 
 def create_self_signed_cert(cert_file, key_file):
-    """Generate a self-signed certificate and private key using cryptography."""
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     
     subject = issuer = x509.Name([

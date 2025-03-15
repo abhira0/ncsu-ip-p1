@@ -81,12 +81,9 @@ async def run_experiment(client, server_url, file_prefix, file_size, repetitions
         label=click.style(f'Downloading {file_name} x {repetitions}', fg='bright_green'),
         item_show_func=lambda i: f"Iteration {i+1}/{repetitions}" if i is not None else ""
     ) as bar:
-        for i in bar:
+        for _ in bar:
             result = await download_file(client, file_url)
-            if result:
-                results.append(result)
-            # Small delay to avoid overwhelming the server
-            await asyncio.sleep(0.01)
+            results.append(result)
     
     if results:
         transfer_times = [r['transfer_time'] for r in results]
@@ -186,9 +183,6 @@ async def main_async(server, file):
                 exp["repetitions"],
                 results_data["files"]
             )
-            
-            # Small delay between file size changes
-            await asyncio.sleep(0.5)
     
     result_filename = f"results_{file}_from_{server}_http2_ssl.json"
     with open(os.path.join(cur_file_path, result_filename), 'w') as f:
