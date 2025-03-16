@@ -1,164 +1,103 @@
 import requests
-import time, os
-import json
-import math
+import time
+import os
 import click
+import sys
 from requests_toolbelt.utils import dump
 
-cur_file_path = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+from utils import Statistics, ExperimentConfig, ResultsManager, ProgressDisplay
 
-with open(os.path.join(cur_file_path, "..", "machines.json"), 'r') as f:
-    MACHINE_IP_MAP = json.load(f)
+class HTTP11Client:
+    def __init__(self, server_host, server_port=8000):
+        self.server_host = server_host
+        self.server_port = server_port
+        self.server_url = f"http://{server_host}:{server_port}/"
+        self.protocol_name = "HTTP/1.1"
+    
+    def download_file(self, file_name, timeout=30):
+        start_time = time.time()
+        url = f"{self.server_url}{file_name}"
+        
+        try:
+            headers = {'Connection': 'close'}
+            response = requests.get(url, stream=False, timeout=timeout, headers=headers)
+            response.raise_for_status()
+            
+            end_time = time.time()
+            transfer_time = end_time - start_time
 
-def download_file(url, timeout=30):
-    """Download a single file and measure performance metrics"""
-    start_time = time.time()
-    
-    try:
-        headers = {'Connection': 'close'}  # Ensure connection closes after each request
-        response = requests.get(url, stream=False, timeout=timeout, headers=headers)
-        response.raise_for_status()
-        
-        end_time = time.time()
-        transfer_time = end_time - start_time
+            data = dump.dump_response(response)
+            total_app_data = len(data)
 
-        data = dump.dump_response(response)
-        total_app_data = len(data)
+            file_size = int(response.headers.get("Content-Length", 0))
+            throughput = file_size * 8 / transfer_time if transfer_time > 0 else 0
+            
+            header_size = total_app_data - file_size
+            overhead_ratio = total_app_data / file_size if file_size > 0 else 0
+            
+            return {
+                'transfer_time': transfer_time,
+                'throughput': throughput,
+                'file_size': file_size,
+                'total_app_data': total_app_data,
+                'overhead_ratio': overhead_ratio,
+                'header_size': header_size
+            }
+        
+        except Exception as e:
+            click.echo(click.style(f"\n❌ Error downloading {url}: {str(e)}", 
+                                   fg='bright_red', bold=True))
+            return None
 
-        file_size = int(response.headers["Content-Length"])
-        throughput = file_size / transfer_time
+    def run_experiment(self, file_name, repetitions):
+        results = []
         
-        header_size = total_app_data - file_size
-        overhead_ratio = total_app_data / file_size
+        with ProgressDisplay.create_progress_bar(file_name, repetitions) as bar:
+            for i in bar:
+                result = self.download_file(file_name)
+                if result:
+                    results.append(result)
         
-        return {
-            'transfer_time': transfer_time,
-            'throughput': throughput,
-            'file_size': file_size,
-            'total_app_data': total_app_data,
-            'overhead_ratio': overhead_ratio,
-            'header_size': header_size
-        }
-    
-    except Exception as e:
-        click.echo(click.style(f"\n❌ Error downloading {url}: {str(e)}", fg='bright_red', bold=True))
-        quit()
+        if not results:
+            click.echo(click.style(f"❌ All download attempts failed for {file_name}", 
+                                  fg='bright_red', bold=True))
+            return None
+        
+        summary = Statistics.process_experiment_results(results, file_name)
+        Statistics.print_experiment_summary(file_name, summary)
+        return summary
+
+    def run_experiments(self, server, file_prefix, experiments=None):
+        if experiments is None:
+            experiments = ExperimentConfig.get_default_experiments()
+        
+        results_data = ResultsManager.initialize_results(
+            self.protocol_name, server, file_prefix
+        )
+        
+        for exp in experiments:
+            file_name = f"{file_prefix}_{exp['size']}"
+            results = self.run_experiment(file_name, exp['repetitions'])
+            if results:
+                results_data["files"][file_name] = results
+        
+        return results_data
 
 
-def calculate_statistics(values):
-    """Calculate mean and standard deviation for a list of values"""
-    n = len(values)
-    if n == 0:
-        return {"mean": 0, "stddev": 0}
-    
-    mean = sum(values) / n
-    
-    if n > 1:
-        variance = sum((x - mean) ** 2 for x in values) / (n - 1)
-        stddev = math.sqrt(variance)
-    else:
-        stddev = 0
-    
-    return {"mean": mean, "stddev": stddev}
-
-def run_experiment(server_url, file_prefix, file_size, repetitions, results_data):
-    """Run a complete experiment for a specific file size with multiple repetitions"""
-    results = []
-    file_name = f"{file_prefix}_{file_size}"
-    file_url = f"{server_url}/{file_name}"
-    
-    click.echo("=" * 80)
-    with click.progressbar(
-        range(repetitions), 
-        label=click.style(f'Downloading {file_name} x {repetitions}', fg='bright_green'),
-        item_show_func=lambda i: f"Iteration {i+1}/{repetitions}" if i is not None else ""
-    ) as bar:
-        for i in bar:
-            result = download_file(file_url)
-            results.append(result)
-    
-    if results:
-        transfer_times = [r['transfer_time'] for r in results]
-        throughputs = [r['throughput'] for r in results]
-        overhead_ratios = [r['overhead_ratio'] for r in results]
-        
-        time_stats = calculate_statistics(transfer_times)
-        throughput_stats = calculate_statistics(throughputs)
-        overhead_stats = calculate_statistics(overhead_ratios)
-        
-        results_data[file_name] = {
-            "file_size_bytes": results[0]['file_size'],
-            "repetitions_completed": len(results),
-            "transfer_time": {
-                "mean": time_stats["mean"],
-                "stddev": time_stats["stddev"]
-            },
-            "throughput_bps": {
-                "mean": throughput_stats["mean"],
-                "stddev": throughput_stats["stddev"]
-            },
-            "overhead_ratio": {
-                "mean": overhead_stats["mean"],
-                "stddev": overhead_stats["stddev"],
-                "description": "Total application layer data / file size"
-            },
-            "raw_results": results
-        }
-        
-        click.echo(f"Avg transfer time:" + click.style(f" {time_stats['mean']:.6f}s", fg="magenta") +
-                  click.style(f" (±{time_stats['stddev']:.6f})", fg='blue'))
-        
-        throughput_kb = throughput_stats['mean']/1024
-        click.echo(f"Avg throughput:" + click.style(f" {throughput_kb:.2f} KB/s", fg="magenta") +
-                  click.style(f" (±{throughput_stats['stddev']/1024:.2f})", fg='blue'))
-        
-        click.echo(f"Avg overhead ratio:" + click.style(f" {overhead_stats['mean']:.6f}", fg="magenta") +
-                  click.style(f" (±{overhead_stats['stddev']:.6f})", fg='blue'))
-        
-        return True
-    
-    return False
+machine_config = ExperimentConfig.load_machine_config()
 
 @click.command()
-@click.option('--server', type=click.Choice(['vm1', 'vm2']), required=True, 
-              help='Server to connect to (vm1 or vm2)')
+@click.option('--server', type=click.Choice(list(machine_config)), required=True, 
+              help='Server to connect to')
 @click.option('--file', type=click.Choice(['A', 'B']), required=True,
               help='File prefix to request (A or B)')
 def main(server, file):
-    server_ip = MACHINE_IP_MAP.get(server)
-    if not server_ip:
-        click.echo(click.style(f"❌ Unknown server: {server}. Use vm1 or vm2.", fg='bright_red', bold=True))
-        return
-    
-    server_url = f"http://{server_ip}:8000/"
+    server_ip = ExperimentConfig.get_server_ip(machine_config, server)
+    client = HTTP11Client(server_ip)
+    results_data = client.run_experiments(server, file)
+    ResultsManager.save_results(results_data, "HTTP/1.1", file, server, current_dir)
 
-    experiments = [
-        {"size": "10kB", "repetitions": 1000},
-        {"size": "100kB", "repetitions": 100},
-        {"size": "1MB", "repetitions": 10},
-        {"size": "10MB", "repetitions": 1}
-    ]
-    
-    results_data = {
-        "protocol": "HTTP/1.1",
-        "server": server,
-        "file_prefix": file,
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "files": {}
-    }
-    
-    for exp in experiments:
-        run_experiment(
-            server_url, 
-            file, 
-            exp["size"], 
-            exp["repetitions"],
-            results_data["files"]
-        )
-    
-    result_filename = f"results_{file}_from_{server}_http1.json"
-    with open(os.path.join(cur_file_path, result_filename), 'w') as f:
-        json.dump(results_data, f, indent=2)
-    
-if __name__ == '__main__':
-    main()
+main()
