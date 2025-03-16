@@ -75,7 +75,7 @@ def main():
     torrent_creator = lt.create_torrent(fs)
 
     # Add the private tracker (running on your Mac) 
-    tracker_url = "udp://0.0.0.0:8000"
+    tracker_url = "udp://tracker.openbittorrent.com:80"
     torrent_creator.add_tracker(tracker_url)
 
     # Compute piece hashes
@@ -97,7 +97,6 @@ def main():
     metrics_log = []
 
     # Global variables for run timing
-    start_time = time.time()   # time when torrent is added
     transfer_start_time = None # will be set when the first peer requests the file
 
     # Dictionary to track active transfers
@@ -120,11 +119,12 @@ def main():
     log_file = str(time.strftime("%Y%m%d-%H%M%S"))+"_seeder_metrics.json"
 
     print(f"Seeding {filename}. Press Ctrl+C to stop.")
+    start_time = time.time()   # time when torrent is added
 
     try:
         while True:
             s = h.status()
-            print(FINISHED_CLIENTS)  # Debug: displays the status object
+            print("finished clients",FINISHED_CLIENTS)  # Debug: displays the status object
 
             # Display aggregated status
             print(f"\rSeeding {ti.name()}: up: {s.upload_rate / 1000:.1f} kB/s, "
@@ -134,8 +134,13 @@ def main():
 
             # Poll peer details
             peers = h.get_peer_info()
+            inspect(peers)  # Debug: displays the peer info
+            print("peers",peers)
+            print("peers len",len(peers))
             current_time = time.time()
-            if peers:
+            if len(peers) > 0:
+                print("Entered peers")
+                sys.stdout.flush()
                 # Set transfer_start_time when the first peer is seen
                 if transfer_start_time is None:
                     transfer_start_time = current_time
@@ -159,6 +164,8 @@ def main():
                         active_peers[peer_id]["finish"] = current_time
                         elapsed = current_time - active_peers[peer_id]["start"]
                         print(f"\nPeer {peer_id} completed transfer in {elapsed:.2f} seconds.")
+                        sys.stdout.flush()
+
             else:
                 print("\nNo peers connected yet.")
 
