@@ -1,28 +1,19 @@
-from hypercorn.config import Config
-from hypercorn.asyncio import serve
-from quart import Quart, send_file
+import socket
 import os
-import sys
-import json
-import click, socket
 import h2.connection
 import h2.config
 
-SERVER_ADDRESS = "0.0.0.0", 8000
-FILE_FOLDER = "./files/"
+FILE_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "files")
 
 class HTTPServer:
     def __init__(self):
-        """Inits the socket, start listening on 8080"""
-        print("server starting..")
         self.sock = socket.socket()
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind(SERVER_ADDRESS)
+        self.sock.bind(("0.0.0.0", 8000))
         self.sock.listen(1)
 
     def start(self):
-        """Start listening to connections"""
-        print("server listening for connections..")
+        print(f"Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/)")
         while True:
             self.handle(self.sock.accept()[0])
 
@@ -33,7 +24,6 @@ class HTTPServer:
         conn.initiate_connection()
         sock.sendall(conn.data_to_send())
 
-        headers = {}
         path =[]
         while True:
             data = sock.recv(65535)
@@ -43,28 +33,20 @@ class HTTPServer:
             events = conn.receive_data(data)
             for event in events:
 
-                # Recieve and process headers
                 if isinstance(event, h2.events.RequestReceived):
                     for header in event.headers:
                         if header[0].decode()==':path':
                             path =header[1].decode()
                     
-                    #print("Received request for ", headers["path"])
-
-                    # path is /file_name extract file_name
                     file_name = path[1:]
-                    # read the file and send it
-                    file_path = FILE_FOLDER + file_name
+                    file_path = os.path.join(FILE_FOLDER, file_name)
                     with open(file_path, "rb") as file:
                         response_data = file.read()
 
                     self.send_successfull_response(conn,sock, event, response_data)
-                    #print("Sent response for ", headers["path"])
 
 
     def send_successfull_response(self, conn,sock, event, response_data):
-        """Send a successfull (HTTP 200) response"""
-
         stream_id = event.stream_id
         conn.send_headers(
             stream_id=stream_id,
@@ -87,11 +69,9 @@ class HTTPServer:
     def wait_for_window_update(self, sock, conn):
         window_updated = False
         while not window_updated:
-            # read raw data from the self.socket
             data = sock.recv(65536 * 1024)
             if not data:
                 break
-
             # feed raw data into h2, and process resulting events
             events = conn.receive_data(data)
             for event in events:
@@ -100,6 +80,4 @@ class HTTPServer:
         sock.sendall(conn.data_to_send())
 
 
-if __name__ == "__main__":
-    server = HTTPServer()
-    server.start()
+HTTPServer().start()
