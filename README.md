@@ -79,21 +79,6 @@ python analyze.py
 
 This will generate an Excel file (`results.xlsx`) with the compiled results.
 
-## Experiment Details
-
-The experiments will:
-- Transfer files of sizes 10kB, 100kB, 1MB, and 10MB
-- Perform 1000 repetitions for 10kB files
-- Perform 100 repetitions for 100kB files
-- Perform 10 repetitions for 1MB files
-- Perform 1 repetition for 10MB files
-
-For each transfer, the following metrics are measured:
-- Transfer time (seconds)
-- Throughput (bits per second)
-- Protocol overhead ratio (total bytes transferred / file size)
-
-
 ## Results
 
 The experiment results are saved as JSON files in the format:
