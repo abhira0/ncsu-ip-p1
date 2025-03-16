@@ -1,12 +1,13 @@
-import libtorrent as lt
-import time
-import sys
 import os
+import sys
+import time
+import csv
+import socket
 import shutil
 import requests
-import socket
-import csv
 from statistics import mean, stdev
+
+import libtorrent as lt
 
 def run_download(magnet_link, run_number, results):
     print(f"\n=== Starting download run {run_number} ===")
@@ -25,12 +26,8 @@ def run_download(magnet_link, run_number, results):
     print(f"Downloading {s.name} ({s.total_wanted} bytes)")
     
     start_time = time.time()
-    flag = False
     
     while handle.status().progress < 1.0:
-        # if s.progress != 0.0 and not flag:
-        #     start_time = time.time()
-        #     flag = True
         s = handle.status()
         print(f"\rProgress: {s.progress * 100:.2f}% (down: {s.download_rate / 1000:.1f} kB/s, peers: {s.num_peers})", end=' ')
         sys.stdout.flush()
@@ -44,13 +41,13 @@ def run_download(magnet_link, run_number, results):
     total_time = end_time - start_time
     file_size = s.total_payload_download
     total_data_transferred = s.total_download
-    # print(total_time, file_size, total_data_transferred)
+    
     throughput = (file_size * 0.008) / total_time if total_time > 0 else 0
     overhead_file_ratio = total_data_transferred / file_size if file_size > 0 else 0
     
     print("\nClient Metrics:")
     print(f"  RTT: {total_time} seconds")
-    print(f"  Throughput: {throughput:.2f} Mbps")
+    print(f"  Throughput: {throughput:.2f} kbps")
     print(f"  Total Data Transferred: {total_data_transferred} bytes")
     print(f"  Overhead File Ratio: {overhead_file_ratio:.2f}")
     
@@ -91,7 +88,7 @@ def main():
     try:
         runs = int(sys.argv[2])
     except ValueError:
-        print("Error: runs and file_size must be integers.")
+        print("Error: runs must be an integer.")
         sys.exit(1)
     
     results = []
@@ -99,7 +96,7 @@ def main():
     for run in range(1, runs + 1):
         end_time = run_download(magnet_link, run, results)
         print("Sending ack to seeder...")
-        resp = requests.post("http://192.168.98.129:8001/ack", json={"client": socket.gethostname(),"time":end_time})
+        resp = requests.post("http://192.168.98.129:8001/ack", json={"client": socket.gethostname(), "time": end_time})
         print(resp)
         
         while True:
