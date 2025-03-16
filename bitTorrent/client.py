@@ -58,6 +58,7 @@ def run_download(magnet_link, run_number, results):
     
     ses.pause()
     del ses
+    return end_time
 
 def save_results(results, filename, runs):
     with open(filename, 'w', newline='') as file:
@@ -96,9 +97,9 @@ def main():
     results = []
     
     for run in range(1, runs + 1):
-        run_download(magnet_link, run, results)
+        end_time = run_download(magnet_link, run, results)
         print("Sending ack to seeder...")
-        resp = requests.post("http://192.168.98.129:8001/ack", json={"client": socket.gethostname()})
+        resp = requests.post("http://192.168.98.129:8001/ack", json={"client": socket.gethostname(),"time":end_time})
         print(resp)
         
         while True:

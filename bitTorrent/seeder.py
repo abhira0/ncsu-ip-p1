@@ -10,28 +10,35 @@ from rich import inspect
 import threading
 from fastapi import FastAPI
 from fastapi import APIRouter
+
+from utils import Statistics, ExperimentConfig, ResultsManager, ProgressDisplay
+
 import fastapi
 router = fastapi.APIRouter()
 
 
 FINISHED_CLIENTS = []
 LOGGED = False
+MX_TIME = 0.0
 
 @router.post("/ack")
 def ack(data: dict):
     global FINISHED_CLIENTS
+    global MX_TIME
     print(f"Client {data['client']} finished.")
     FINISHED_CLIENTS.append(data['client'])
+    MX_TIME = max(MX_TIME, data['time'])
     return {"acknowledged": True}
 
 @router.get("/ready")
 def ready(client: str):
     global LOGGED
     global FINISHED_CLIENTS
+    global MX_TIME
     if len(FINISHED_CLIENTS) == 3 and LOGGED:
         FINISHED_CLIENTS = []
         LOGGED = False
-        
+        MX_TIME = 0.0
     return {"ready": client not in FINISHED_CLIENTS}
 
 app = FastAPI()
@@ -171,7 +178,7 @@ def main():
 
             # Check if payload threshold is reached for this run
             if len(FINISHED_CLIENTS) == 3 and not LOGGED:
-                end_time = time.time()
+                end_time = MX_TIME#time.time()
                 # Use transfer_start_time if available; otherwise, fallback to start_time
                 effective_start = transfer_start_time if transfer_start_time is not None else start_time
                 total_seeding_time = end_time - effective_start
@@ -188,18 +195,23 @@ def main():
                     }
 
                 summary_log = {
-                    "file": filename,
+                    "transfer_time": total_seeding_time,
+                    "throughput": (s.total_payload_upload * 0.008 / total_seeding_time if total_seeding_time > 0 else 0),
+                    "file_size": file_size,
                     "info_hash": info_hash,
+                    "total_app_data": s.total_payload_upload,
+                    "overhead_ratio": s.total_upload / s.total_payload_upload,
+                    "header_size": s.total_upload - s.total_payload_upload,
                     "run_payload_uploaded": s.total_payload_upload,
                     "total_seeding_time_seconds": total_seeding_time,
                     "total_payload_uploaded": s.total_payload_upload,
                     "total_data_uploaded": s.total_upload,
                     "protocol_overhead_bytes": s.total_upload - s.total_payload_upload,
                     # Throughput computed here with a conversion factor (adjust as needed)
-                    "throughput": (s.total_payload_upload * 0.008 / total_seeding_time if total_seeding_time > 0 else 0),
                     "total_peers_connected": len(active_peers),
                     "peer_details": peer_details,
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    
                 }
 
                 # Append the run summary to the JSON log file
@@ -243,7 +255,7 @@ def main():
             mean_throughput = stdev_throughput = 0
 
         # Compute the ratio (total_payload_uploaded / file_size) for each run and then average.
-        ratio_list = [run["total_data_uploaded"] / (3*file_size) for run in all_logs if run.get("total_data_uploaded", 0) > 0]
+        ratio_list = [run["overhead_ratio"] for run in all_logs]
         if ratio_list:
             avg_ratio = statistics.mean(ratio_list)
         else:
