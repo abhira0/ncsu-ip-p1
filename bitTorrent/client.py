@@ -4,7 +4,7 @@ import sys
 import os
 import shutil
 import requests
-
+import socket
 def run_download(magnet_link, run_number):
     print(f"\n=== Starting download run {run_number} ===")
     # Ensure download directory exists
@@ -60,6 +60,7 @@ def run_download(magnet_link, run_number):
     del ses
 
 def main():
+    ready_url = "http://192.168.98.129:8001/ready"
     # Expect two arguments: magnet_link and runs (number of download cycles)
     if len(sys.argv) != 3:
         print("Usage: python client.py <magnet_link> <runs>")
@@ -74,11 +75,19 @@ def main():
 
     for run in range(1, runs + 1):
         run_download(magnet_link, run)
-        requests.post("ack", payload="vm1")
-        is_ready = requests.get("ready")
-        while is_ready.json()["ready"] == False:
-            is_ready = requests.get("ready")
-            time.sleep(0.001)
+        print("Sending ack to seeder...")
+        resp = requests.post("http://192.168.98.129:8001/ack", json={"client":socket.gethostname()})
+        print(resp)
+        while True:
+            try:
+                response = requests.get(ready_url, params={"client": socket.gethostname()})
+                data = response.json()
+                if data.get("ready", False):
+                    break
+            except requests.exceptions.JSONDecodeError:
+                # If the response isn't valid JSON, print a message and try again
+                print("Received invalid JSON from /ready, retrying...")
+            time.sleep(0.1)
         # Clean up downloads folder after each run
         print("Deleting downloads folder...")
         shutil.rmtree("./downloads", ignore_errors=True)
