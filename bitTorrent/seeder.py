@@ -1,4 +1,5 @@
 import libtorrent as lt
+import uvicorn
 import time
 import sys
 import os
@@ -6,26 +7,46 @@ import json
 import statistics
 from datetime import datetime
 from rich import inspect
-
+import threading
+from fastapi import FastAPI
+from fastapi import APIRouter
 import fastapi
 router = fastapi.APIRouter()
 
 
-finsihed_clients = 0
+FINISHED_CLIENTS = []
+LOGGED = False
 
-router.post("/ack")
-def ack():
-    finsihed_clients+=1
+@router.post("/ack")
+def ack(data: dict):
+    global FINISHED_CLIENTS
+    print(f"Client {data['client']} finished.")
+    FINISHED_CLIENTS.append(data['client'])
+    return {"acknowledged": True}
 
-router.get("/ready")
-def ready():
-    is_ready = finsihed_clients == 3
-    if is_ready:
-        finsihed_clients.clear()
-    return {"ready": is_ready}
-    
+@router.get("/ready")
+def ready(client: str):
+    global LOGGED
+    global FINISHED_CLIENTS
+    if len(FINISHED_CLIENTS) == 3 and LOGGED:
+        FINISHED_CLIENTS = []
+        LOGGED = False
+        
+    return {"ready": client not in FINISHED_CLIENTS}
 
+app = FastAPI()
+app.include_router(router)
+
+def run_api():
+
+    uvicorn.run(app, host="0.0.0.0", port=8001, reload=False, workers=1)
 def main():
+    global FINISHED_CLIENTS
+    global LOGGED
+    global is_ready
+        # Start the API server in a background thread
+    api_thread = threading.Thread(target=run_api)
+    api_thread.start()
     # Remove any existing metrics file
     if os.path.exists("seeder_metrics.json"):
         os.remove("seeder_metrics.json")
@@ -96,14 +117,14 @@ def main():
 
     # Start the first run
     h = add_new_torrent()
-    log_file = "seeder_metrics.json"
+    log_file = str(time.strftime("%Y%m%d-%H%M%S"))+"_seeder_metrics.json"
 
     print(f"Seeding {filename}. Press Ctrl+C to stop.")
 
     try:
         while True:
             s = h.status()
-            inspect(s)  # Debug: displays the status object
+            print(FINISHED_CLIENTS)  # Debug: displays the status object
 
             # Display aggregated status
             print(f"\rSeeding {ti.name()}: up: {s.upload_rate / 1000:.1f} kB/s, "
@@ -142,7 +163,7 @@ def main():
                 print("\nNo peers connected yet.")
 
             # Check if payload threshold is reached for this run
-            if s.total_payload_upload >= 30720:
+            if len(FINISHED_CLIENTS) == 3 and not LOGGED:
                 end_time = time.time()
                 # Use transfer_start_time if available; otherwise, fallback to start_time
                 effective_start = transfer_start_time if transfer_start_time is not None else start_time
@@ -191,6 +212,7 @@ def main():
                 # Remove the current torrent from the session and re-add it for a new run
                 ses.remove_torrent(h)
                 h = add_new_torrent()
+                LOGGED = True
 
             time.sleep(1)
 
@@ -214,7 +236,7 @@ def main():
             mean_throughput = stdev_throughput = 0
 
         # Compute the ratio (total_payload_uploaded / file_size) for each run and then average.
-        ratio_list = [run["total_payload_uploaded"] / (3*file_size) for run in all_logs if run.get("total_payload_uploaded", 0) > 0]
+        ratio_list = [run["total_data_uploaded"] / (3*file_size) for run in all_logs if run.get("total_data_uploaded", 0) > 0]
         if ratio_list:
             avg_ratio = statistics.mean(ratio_list)
         else:
@@ -227,7 +249,7 @@ def main():
             "file_size": file_size,
             "num_runs": len(all_logs)
         }
-        final_summary_file = "final_summary.json"
+        final_summary_file = str(file_size)+str(time.strftime("%Y%m%d-%H%M%S"))+"_final_summary.json"
         with open(final_summary_file, 'w') as f:
             json.dump(final_summary, f, indent=2)
         print(f"Final summary written to {final_summary_file}")
