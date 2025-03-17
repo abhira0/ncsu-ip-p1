@@ -117,16 +117,16 @@ For each file size, follow these steps:
    python bitTorrent/client.py "magnet:?xt=urn:btih:2a4a8f6b6ee266ea20cbcf1c1f148a82622d6285&dn=A_10kB&tr=udp://tracker.opentrackr.org:1337" 333
    
    # Example for A_100kB with 33 repetitions:
-   python bitTorrent/client.py "magnet:?xt=urn:btih:a636e03b04c06aca1b77d18421907cc3caf397a7&dn=A_100kB&tr=udp://tracker.openbittorrent.com:80" 33
+   python bitTorrent/client.py "magnet:?xt=urn:btih:a636e03b04c06aca1b77d18421907cc3caf397a7&dn=A_100kB&tr=udp://tracker.opentrackr.org:1337" 33
    
    # Example for A_1MB with 3 repetitions:
-   python bitTorrent/client.py "magnet:?xt=urn:btih:d582bfe87f63815d66cf9b24acdf54c2048031ae&dn=A_1MB&tr=udp://tracker.openbittorrent.com:80" 3
+   python bitTorrent/client.py "magnet:?xt=urn:btih:d582bfe87f63815d66cf9b24acdf54c2048031ae&dn=A_1MB&tr=udp://tracker.opentrackr.org:1337" 3
    
    # Example for A_10MB with 1 repetition:
-   python bitTorrent/client.py "magnet:?xt=urn:btih:c5ad84a08ee85f37679e89fdd12591eaae9a85fb&dn=A_10MB&tr=udp://tracker.openbittorrent.com:80" 1
+   python bitTorrent/client.py "magnet:?xt=urn:btih:c5ad84a08ee85f37679e89fdd12591eaae9a85fb&dn=A_10MB&tr=udp://tracker.opentrackr.org:1337" 1
    ```
 
-   **Note**: Try to start all three client VMs at approximately the same time to ensure they can participate in the swarm together.
+   **Note**: Try to start all three client VMs at approximately the same time to ensure they can participate together.
 
 3. **Collecting Results**:
    - The seeder will automatically generate result files in the format: `<timestamp>_seeder_metrics.json`
@@ -145,7 +145,7 @@ This will generate an Excel file (`results.xlsx`) with the compiled results.
 ## BitTorrent Tracker Details
 The BitTorrent protocol requires a tracker to coordinate communication between peers. In this implementation:
 
-- We use OpenTracker's UDP protocol (udp://tracker.opentrackr.org:1337 and udp://tracker.openbittorrent.com:80)
+- We use OpenTracker's UDP protocol (udp://tracker.opentrackr.org:1337)
 - The tracker helps peers discover each other in the swarm
 When the seeder creates a torrent, it registers with the tracker and gets a unique info hash
 - Clients connect to the tracker using the magnet link, which contains:
