@@ -1,11 +1,11 @@
 # Internet Protocols Project 1
 
-This project implements and compares the performance of HTTP/1.1 and HTTP/2 protocols by transferring files of different sizes between servers and measuring throughput, transfer time, and protocol overhead.
+This project implements and compares the performance of HTTP/1.1, HTTP/2, and BitTorrent protocols by transferring files of different sizes between servers and measuring throughput, transfer time, and protocol overhead.
 
 ## Setup Instructions
 
 ### Install Python packages
-We would recommed using a virtual macchine before starting the project setup.
+We recommend using a virtual environment before starting the project setup.
 ```bash
 pip install -r requirements.txt 
 ```
@@ -77,12 +77,94 @@ Run the experiments in sequence as follows:
      ```
    - This will create a results file: `http2/results_B_from_vm2_http2.json` on VM1
 
+### BitTorrent Experiments
+
+BitTorrent experiments require four computers (or VMs). One computer will have the initial file, and all four computers will participate in the file exchange using the BitTorrent protocol. We are using opentracker udp protocol as our tracker.
+
+#### Running BitTorrent Experiments
+
+For each file size, follow these steps:
+
+1. **Start the Seeder on VM1**:
+   ```bash
+   # General format:
+   python bitTorrent/seeder.py /path/to/file
+   
+   # Example for A_10kB:
+   python bitTorrent/seeder.py /home/vm1/Desktop/ncsu-ip-p1/files/A_10kB
+   ```
+
+   When the seeder starts, it will display a magnet link that looks like:
+   ```
+   magnet:?xt=urn:btih:<hash>&dn=<filename>&tr=<tracker_url>
+   ```
+   Copy this magnet link for use with the clients.
+
+2. **Start the Clients on VM2, VM3, and VM4**:
+   
+   For each file size, use the appropriate number of repetitions:
+   - A_10kB: 333 repetitions
+   - A_100kB: 33 repetitions
+   - A_1MB: 3 repetitions
+   - A_10MB: 1 repetition
+
+   Run this command on each client VM (VM2, VM3, VM4):
+   ```bash
+   # General format:
+   python bitTorrent/client.py "<magnet_link>" <repetitions>
+   
+   # Example for A_10kB with 333 repetitions:
+   python bitTorrent/client.py "magnet:?xt=urn:btih:2a4a8f6b6ee266ea20cbcf1c1f148a82622d6285&dn=A_10kB&tr=udp://tracker.opentrackr.org:1337" 333
+   
+   # Example for A_100kB with 33 repetitions:
+   python bitTorrent/client.py "magnet:?xt=urn:btih:a636e03b04c06aca1b77d18421907cc3caf397a7&dn=A_100kB&tr=udp://tracker.openbittorrent.com:80" 33
+   
+   # Example for A_1MB with 3 repetitions:
+   python bitTorrent/client.py "magnet:?xt=urn:btih:d582bfe87f63815d66cf9b24acdf54c2048031ae&dn=A_1MB&tr=udp://tracker.openbittorrent.com:80" 3
+   
+   # Example for A_10MB with 1 repetition:
+   python bitTorrent/client.py "magnet:?xt=urn:btih:c5ad84a08ee85f37679e89fdd12591eaae9a85fb&dn=A_10MB&tr=udp://tracker.openbittorrent.com:80" 1
+   ```
+
+   **Note**: Try to start all three client VMs at approximately the same time to ensure they can participate in the swarm together.
+
+3. **Collecting Results**:
+   - The seeder will automatically generate result files in the format: `<timestamp>_seeder_metrics.json`
+   - For final analysis, use `results_<fileSize>_from_vm1_bitTorrent.json` files
+
 ### Analyze Results
 
-After running all experiments, collect all JSON result files from both machines and place them in the project root directory. Then run the analysis script:
+After running all experiments, collect all JSON result files from all machines and place them in the project root directory. Then run the analysis script:
 
 ```bash
 python analyze.py
 ```
 
 This will generate an Excel file (`results.xlsx`) with the compiled results.
+
+## Important Notes for BitTorrent
+
+- The seeder must be started before any clients
+- The seeder needs to remain running during all client downloads
+- The seeder program automatically tracks when all three clients have completed a download
+- Magnet links are unique for each file and seeding session
+- The seeder automatically handles restarting the torrent for multiple runs
+
+## BitTorrent Tracker Details
+The BitTorrent protocol requires a tracker to coordinate communication between peers. In this implementation:
+
+- We use OpenTracker's UDP protocol (udp://tracker.opentrackr.org:1337 and udp://tracker.openbittorrent.com:80)
+- The tracker helps peers discover each other in the swarm
+When the seeder creates a torrent, it registers with the tracker and gets a unique info hash
+- Clients connect to the tracker using the magnet link, which contains:
+
+ - The info hash (xt=urn:btih:<hash>)
+ - The file name (dn=<filename>)
+ - The tracker URL (tr=<tracker_url>)
+
+## Troubleshooting BitTorrent
+
+- If clients can't connect to the seeder, check firewall settings on all machines
+- Ensure UDP port 6881 (client) and 6882 (seeder) are open
+- Verify that HTTP port 8001 is open for the seeder's API communications
+- If the tracker connection fails, you may need to use a different tracker URL in the seeder.py file
