@@ -126,7 +126,7 @@ For each file size, follow these steps:
    python bitTorrent/client.py "magnet:?xt=urn:btih:c5ad84a08ee85f37679e89fdd12591eaae9a85fb&dn=A_10MB&tr=udp://tracker.openbittorrent.com:80" 1
    ```
 
-   **Note**: Try to start all three client VMs at approximately the same time to ensure they can participate together.
+   **Note**: Change the IP address in client.py to the seeder IP address to enable proper tracking of the download progress. Otherwise the timings will not be recorded properly. Try to start all three client VMs at approximately the same time to ensure they can participate together.
 
 3. **Collecting Results**:
    - The seeder will automatically generate result files in the format: `<timestamp>_seeder_metrics.json`
