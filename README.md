@@ -15,8 +15,10 @@ Modify `machines.json` to set the IP addresses of your virtual machines:
 
 ```json
 {
-  "vm1": "192.168.254.129",
-  "vm2": "192.168.254.130"
+    "vm1": "192.168.254.129",
+    "vm2": "192.168.254.130",
+    "vm3": "192.168.254.131",
+    "vm4": "192.168.254.132"
 }
 ```
 
