@@ -5,6 +5,7 @@ This project implements and compares the performance of HTTP/1.1 and HTTP/2 prot
 ## Setup Instructions
 
 ### Install Python packages
+We would recommed using a virtual macchine before starting the project setup.
 ```bash
 pip install -r requirements.txt 
 ```
@@ -85,16 +86,3 @@ python analyze.py
 ```
 
 This will generate an Excel file (`results.xlsx`) with the compiled results.
-
-## Results
-
-The experiment results are saved as JSON files in the format:
-- `results_A_from_vm1_http1.json` - Results for downloading A files from VM1 to VM2 using HTTP/1.1
-- `results_B_from_vm2_http1.json` - Results for downloading B files from VM2 to VM1 using HTTP/1.1
-- `results_A_from_vm1_http2.json` - Results for downloading A files from VM1 to VM2 using HTTP/2
-- `results_B_from_vm2_http2.json` - Results for downloading B files from VM2 to VM1 using HTTP/2
-
-The final analysis generates an Excel file (`results.xlsx`) with three sheets:
-1. Transfer Time (seconds)
-2. Throughput (bits per second)
-3. Overhead Ratio
