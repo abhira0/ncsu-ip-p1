@@ -142,14 +142,6 @@ python analyze.py
 
 This will generate an Excel file (`results.xlsx`) with the compiled results.
 
-## Important Notes for BitTorrent
-
-- The seeder must be started before any clients
-- The seeder needs to remain running during all client downloads
-- The seeder program automatically tracks when all three clients have completed a download
-- Magnet links are unique for each file and seeding session
-- The seeder automatically handles restarting the torrent for multiple runs
-
 ## BitTorrent Tracker Details
 The BitTorrent protocol requires a tracker to coordinate communication between peers. In this implementation:
 
@@ -161,10 +153,3 @@ When the seeder creates a torrent, it registers with the tracker and gets a uniq
  - The info hash (xt=urn:btih:<hash>)
  - The file name (dn=<filename>)
  - The tracker URL (tr=<tracker_url>)
-
-## Troubleshooting BitTorrent
-
-- If clients can't connect to the seeder, check firewall settings on all machines
-- Ensure UDP port 6881 (client) and 6882 (seeder) are open
-- Verify that HTTP port 8001 is open for the seeder's API communications
-- If the tracker connection fails, you may need to use a different tracker URL in the seeder.py file
