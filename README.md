@@ -4,6 +4,11 @@ This project implements and compares the performance of HTTP/1.1 and HTTP/2 prot
 
 ## Setup Instructions
 
+### Install Python packages
+```bash
+pip install -r requirements.txt 
+```
+
 ### Configure Machine IPs
 
 Modify `machines.json` to set the IP addresses of your virtual machines:
