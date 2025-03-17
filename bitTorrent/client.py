@@ -9,8 +9,13 @@ from statistics import mean, stdev
 
 import libtorrent as lt
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+from utils import ProgressDisplay
+
 def run_download(magnet_link, run_number, results):
-    print(f"\n=== Starting download run {run_number} ===")
+    # print(f"\n=== Starting download run {run_number} ===")
     download_path = "./downloads"
     os.makedirs(download_path, exist_ok=True)
     
@@ -23,19 +28,19 @@ def run_download(magnet_link, run_number, results):
         time.sleep(1)
     
     s = handle.status()
-    print(f"Downloading {s.name} ({s.total_wanted} bytes)")
+    # print(f"Downloading {s.name} ({s.total_wanted} bytes)")
     
     start_time = time.time()
     
     while handle.status().progress < 1.0:
         s = handle.status()
-        print(f"\rProgress: {s.progress * 100:.2f}% (down: {s.download_rate / 1000:.1f} kB/s, peers: {s.num_peers})", end=' ')
+        # print(f"\rProgress: {s.progress * 100:.2f}% (down: {s.download_rate / 1000:.1f} kB/s, peers: {s.num_peers})", end=' ')
         sys.stdout.flush()
         
         time.sleep(1)
     
     end_time = time.time()
-    print("\nDownload complete.")
+    # print("\nDownload complete.")
     
     s = handle.status()
     total_time = end_time - start_time
@@ -44,12 +49,6 @@ def run_download(magnet_link, run_number, results):
     
     throughput = (file_size * 0.008) / total_time if total_time > 0 else 0
     overhead_file_ratio = total_data_transferred / file_size if file_size > 0 else 0
-    
-    print("\nClient Metrics:")
-    print(f"  RTT: {total_time} seconds")
-    print(f"  Throughput: {throughput:.2f} kbps")
-    print(f"  Total Data Transferred: {total_data_transferred} bytes")
-    print(f"  Overhead File Ratio: {overhead_file_ratio:.2f}")
     
     results.append((total_time, throughput, total_data_transferred, overhead_file_ratio))
     
@@ -92,28 +91,25 @@ def main():
         sys.exit(1)
     
     results = []
+    with ProgressDisplay.create_progress_bar("File", runs) as bar:
+        for run in bar:
+            end_time = run_download(magnet_link, run, results)
+            # print("Sending ack to seeder...")
+            resp = requests.post("http://192.168.98.129:8001/ack", json={"client": socket.gethostname(), "time": end_time})
+            while True:
+                try:
+                    response = requests.get(ready_url, params={"client": socket.gethostname()})
+                    data = response.json()
+                    if data.get("ready", False):
+                        break
+                except requests.exceptions.JSONDecodeError:
+                    print("Received invalid JSON from /ready, retrying...")
+                time.sleep(0.1)
+            
+            # print("Deleting downloads folder...")
+            shutil.rmtree("./downloads", ignore_errors=True)
+            time.sleep(2)
     
-    for run in range(1, runs + 1):
-        end_time = run_download(magnet_link, run, results)
-        print("Sending ack to seeder...")
-        resp = requests.post("http://192.168.98.129:8001/ack", json={"client": socket.gethostname(), "time": end_time})
-        print(resp)
-        
-        while True:
-            try:
-                response = requests.get(ready_url, params={"client": socket.gethostname()})
-                data = response.json()
-                if data.get("ready", False):
-                    break
-            except requests.exceptions.JSONDecodeError:
-                print("Received invalid JSON from /ready, retrying...")
-            time.sleep(0.1)
-        
-        print("Deleting downloads folder...")
-        shutil.rmtree("./downloads", ignore_errors=True)
-        time.sleep(2)
-    
-    save_results(results, "download_results.csv", runs)
 
 if __name__ == "__main__":
     try:

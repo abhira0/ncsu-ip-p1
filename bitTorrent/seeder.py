@@ -11,6 +11,10 @@ import uvicorn
 from fastapi import FastAPI
 from rich import inspect
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+
 from utils import Statistics, ExperimentConfig, ResultsManager, ProgressDisplay
 
 FINISHED_CLIENTS = []
@@ -244,7 +248,7 @@ def main():
         )
         if summ:
             results_data["files"][str(file_size)] = summ
-            ResultsManager.save_results(results_data, "bitTorrent", str(file_size), "vm1", ".")
+            ResultsManager.save_results(results_data, "bitTorrent", str(file_size), "vm1", current_dir)
         print("Seeder shutdown complete")
         sys.exit(0)
 

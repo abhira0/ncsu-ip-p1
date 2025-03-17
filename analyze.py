@@ -52,7 +52,17 @@ def merge_protocol_results(file_results):
         else:
             base_size = file_name
         
+        base_size_conversion = {
+            '10240': '10kB',
+            '102400': '100kB',
+            '1048576': '1MB',
+            '10485760': '10MB'
+        }
+
         # Skip if base_size is not in the expected format
+        if base_size not in ['10kB', '100kB', '1MB', '10MB']:
+            base_size = base_size_conversion[base_size]
+        
         if base_size not in ['10kB', '100kB', '1MB', '10MB']:
             continue
             
