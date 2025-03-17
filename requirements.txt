@@ -1,0 +1,11 @@
+requests
+requests-toolbelt
+h2
+click
+libtorrent
+fastapi
+uvicorn
+rich
+pandas
+openpyxl
+matplotlib
